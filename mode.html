@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#000000">
+    <title>Kinetic Wake Lock</title>
+    <script>
+        const manifest = {
+            "name": "Kinetic Wake Lock PWA",
+            "short_name": "Kinetic",
+            "start_url": window.location.href,
+            "display": "standalone",
+            "background_color": "#000000",
+            "theme_color": "#000000",
+            "icons": [{
+                "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%235c5c5c'/%3E%3C/svg%3E",
+                "sizes": "192x192",
+                "type": "image/svg+xml"
+            }]
+        };
+        const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
+        const manifestUrl = URL.createObjectURL(manifestBlob);
+        document.write(`<link rel="manifest" href="${manifestUrl}">`);
+    </script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000000;
+            font-family: system-ui, -apple-system, sans-serif;
+            transition: background-color 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        #ui-layer {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+            background: rgba(128, 128, 128, 0.15);
+            padding: 15px 30px;
+            border-radius: 40px;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            align-items: center;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .color-node {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+        .color-node:hover {
+            transform: scale(1.2);
+        }
+        #node-black { background-color: #000000; }
+        #node-gray { background-color: #5c5c5c; }
+        #node-white { background-color: #ffffff; }
+
+        #lock-status {
+            color: #ffffff;
+            font-size: 13px;
+            margin-left: 10px;
+            font-weight: 600;
+            letter-spacing: 1.5px;
+            mix-blend-mode: difference;
+        }
+        button#toggle-lock {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            color: #ffffff;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            mix-blend-mode: difference;
+        }
+        button#toggle-lock:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <canvas id="generative-surface"></canvas>
+    
+    <div id="ui-layer">
+        <button id="toggle-lock">Initialize Lock</button>
+        <div class="color-node" id="node-black" onclick="updateTheme('#000000')"></div>
+        <div class="color-node" id="node-gray" onclick="updateTheme('#5c5c5c')"></div>
+        <div class="color-node" id="node-white" onclick="updateTheme('#ffffff')"></div>
+        <div id="lock-status">INACTIVE</div>
+    </div>
+
+    <script>
+        /* --- Screen Wake Lock API Integration --- */
+        let wakeLockRef = null;
+        const statusDisplay = document.getElementById('lock-status');
+        const actionBtn = document.getElementById('toggle-lock');
+
+        async function acquireWakeLock() {
+            if (!('wakeLock' in navigator)) {
+                statusDisplay.textContent = 'UNSUPPORTED';
+                return;
+            }
+            try {
+                wakeLockRef = await navigator.wakeLock.request('screen');
+                statusDisplay.textContent = 'ACTIVE';
+                actionBtn.textContent = 'Release Lock';
+                
+                // The OS can revoke the lock (e.g., low battery, tab backgrounded). 
+                // We must handle the release event.
+                wakeLockRef.addEventListener('release', () => {
+                    statusDisplay.textContent = 'INACTIVE';
+                    actionBtn.textContent = 'Initialize Lock';
+                    wakeLockRef = null;
+                });
+            } catch (err) {
+                statusDisplay.textContent = 'ERROR';
+                console.error(`Wake Lock Error: ${err.name}, ${err.message}`);
+            }
+        }
+
+        function handleWakeLockToggle() {
+            if (wakeLockRef !== null) {
+                wakeLockRef.release();
+            } else {
+                acquireWakeLock();
+            }
+        }
+
+        actionBtn.addEventListener('click', handleWakeLockToggle);
+
+        // Re-acquire lock automatically when the PWA is brought back to the foreground
+        document.addEventListener('visibilitychange', async () => {
+            if (wakeLockRef !== null && document.visibilityState === 'visible') {
+                await acquireWakeLock();
+            }
+        });
+
+        /* --- Generative Rendering Engine --- */
+        const canvas = document.getElementById('generative-surface');
+        const ctx = canvas.getContext('2d');
+        let entities = [];
+        let currentThemeHex = '#000000';
+
+        function syncCanvasDimensions() {
+            // Adjust for high DPI displays
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = window.innerWidth * dpr;
+            canvas.height = window.innerHeight * dpr;
+            ctx.scale(dpr, dpr);
+            canvas.style.width = `${window.innerWidth}px`;
+            canvas.style.height = `${window.innerHeight}px`;
+        }
+        window.addEventListener('resize', syncCanvasDimensions);
+        syncCanvasDimensions();
+
+        class KineticEntity {
+            constructor() {
+                this.x = Math.random() * window.innerWidth;
+                this.y = Math.random() * window.innerHeight;
+                this.vx = (Math.random() - 0.5) * 1.2;
+                this.vy = (Math.random() - 0.5) * 1.2;
+                this.mass = Math.random() * 2 + 0.5;
+            }
+            computePhysics() {
+                this.x += this.vx;
+                this.y += this.vy;
+                
+                // Boundary collision inversion
+                if (this.x < 0 || this.x > window.innerWidth) this.vx *= -1;
+                if (this.y < 0 || this.y > window.innerHeight) this.vy *= -1;
+            }
+            render(context, inverseColor) {
+                context.beginPath();
+                context.arc(this.x, this.y, this.mass, 0, Math.PI * 2);
+                context.fillStyle = inverseColor;
+                context.fill();
+            }
+        }
+
+        // Initialize entity pool
+        const entityCount = window.innerWidth < 768 ? 60 : 120;
+        for (let i = 0; i < entityCount; i++) entities.push(new KineticEntity());
+
+        function renderLoop() {
+            ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+            
+            // Dynamic contrast logic based on selected hex
+            const isLightBackground = currentThemeHex === '#ffffff';
+            const nodeColor = isLightBackground ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.6)';
+
+            entities.forEach(entity => {
+                entity.computePhysics();
+                entity.render(ctx, nodeColor);
+            });
+
+            // Proximity networking calculations
+            const connectionDistance = 140;
+            for (let i = 0; i < entities.length; i++) {
+                for (let j = i + 1; j < entities.length; j++) {
+                    const dx = entities[i].x - entities[j].x;
+                    const dy = entities[i].y - entities[j].y;
+                    const squaredDistance = dx * dx + dy * dy;
+
+                    if (squaredDistance < connectionDistance * connectionDistance) {
+                        const distance = Math.sqrt(squaredDistance);
+                        const opacity = 1 - (distance / connectionDistance);
+                        
+                        ctx.beginPath();
+                        ctx.strokeStyle = isLightBackground 
+                            ? `rgba(0,0,0,${opacity * 0.5})` 
+                            : `rgba(255,255,255,${opacity * 0.5})`;
+                        ctx.lineWidth = 0.8;
+                        ctx.moveTo(entities[i].x, entities[i].y);
+                        ctx.lineTo(entities[j].x, entities[j].y);
+                        ctx.stroke();
+                    }
+                }
+            }
+            requestAnimationFrame(renderLoop);
+        }
+        renderLoop();
+
+        /* --- Theme Management --- */
+        window.updateTheme = function(hexColor) {
+            currentThemeHex = hexColor;
+            document.body.style.backgroundColor = hexColor;
+            
+            // Update meta theme color dynamically for the PWA frame
+            const metaTheme = document.querySelector('meta[name="theme-color"]');
+            if(metaTheme) metaTheme.setAttribute('content', hexColor);
+        };
+
+        /* --- Dynamic Service Worker Initialization --- */
+        const serviceWorkerLogic = `
+            const CACHE_ID = 'kinetic-pwa-v1';
+            self.addEventListener('install', event => {
+                self.skipWaiting();
+            });
+            self.addEventListener('activate', event => {
+                event.waitUntil(clients.claim());
+            });
+            self.addEventListener('fetch', event => {
+                // Network-first strategy for a single-file construct
+                event.respondWith(
+                    fetch(event.request).catch(() => {
+                        return new Response('Application operates fully in offline mode via local cache.');
+                    })
+                );
+            });
+        `;
+        const swBlobData = new Blob([serviceWorkerLogic], {type: 'application/javascript'});
+        const swObjectUrl = URL.createObjectURL(swBlobData);
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register(swObjectUrl, { scope: '/' })
+                .then(registration => {
+                    console.log('Virtual ServiceWorker registered.');
+                })
+                .catch(error => {
+                    console.error('ServiceWorker registration failed:', error);
+                });
+            });
+        }
+    </script>
+</body>
+</html>
