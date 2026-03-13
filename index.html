@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#000000">
-    <title>Kinetic Wake Lock</title>
+    <title>Kinetic Wake Lock PWA</title>
     <script>
         const manifest = {
             "name": "Kinetic Wake Lock PWA",
@@ -33,65 +33,100 @@
             background-color: #000000;
             font-family: system-ui, -apple-system, sans-serif;
             transition: background-color 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+            color: #ffffff;
         }
+        
         canvas {
             display: block;
             width: 100vw;
             height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
         }
+
         #ui-layer {
             position: absolute;
             bottom: 40px;
             left: 50%;
             transform: translateX(-50%);
             display: flex;
-            gap: 20px;
+            flex-direction: column;
+            gap: 15px;
             background: rgba(128, 128, 128, 0.15);
-            padding: 15px 30px;
+            padding: 15px 25px;
             border-radius: 40px;
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
             align-items: center;
             box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
             border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 10;
+            width: fit-content;
         }
-        .color-node {
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            border: 2px solid rgba(255, 255, 255, 0.4);
-            cursor: pointer;
-            transition: transform 0.3s ease;
+
+        .controls-header {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            margin-bottom: 5px;
         }
-        .color-node:hover {
-            transform: scale(1.2);
-        }
-        #node-black { background-color: #000000; }
-        #node-gray { background-color: #5c5c5c; }
-        #node-white { background-color: #ffffff; }
 
         #lock-status {
-            color: #ffffff;
             font-size: 13px;
-            margin-left: 10px;
             font-weight: 600;
             letter-spacing: 1.5px;
-            mix-blend-mode: difference;
+            padding: 0 10px;
+            transition: color 0.3s ease;
         }
+        
         button#toggle-lock {
             background: transparent;
             border: 1px solid rgba(255, 255, 255, 0.4);
-            color: #ffffff;
             padding: 10px 20px;
             border-radius: 20px;
             cursor: pointer;
             font-family: inherit;
             font-weight: 500;
             transition: all 0.3s ease;
-            mix-blend-mode: difference;
         }
-        button#toggle-lock:hover {
-            background: rgba(255, 255, 255, 0.1);
+
+        .color-picker-group {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+        }
+
+        .color-node {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            cursor: pointer;
+            transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        .color-node:hover {
+            transform: scale(1.2);
+        }
+
+        #node-black { background-color: #000000; }
+        #node-gray { background-color: #5c5c5c; }
+        #node-white { background-color: #ffffff; }
+        #node-orange { background-color: #F49D00; }
+        #node-pink { background-color: #FF00FF; }
+        #node-purple { background-color: #9933FF; }
+        #node-blue { background-color: #00CCFF; }
+        #node-teal { background-color: #00CCCC; }
+        #node-lime { background-color: #80CC00; }
+
+        @media (max-width: 600px) {
+            .color-picker-group { gap: 10px; }
+            .color-node { width: 20px; height: 20px; }
         }
     </style>
 </head>
@@ -99,15 +134,29 @@
     <canvas id="generative-surface"></canvas>
     
     <div id="ui-layer">
-        <button id="toggle-lock">Initialize Lock</button>
-        <div class="color-node" id="node-black" onclick="updateTheme('#000000')"></div>
-        <div class="color-node" id="node-gray" onclick="updateTheme('#5c5c5c')"></div>
-        <div class="color-node" id="node-white" onclick="updateTheme('#ffffff')"></div>
-        <div id="lock-status">INACTIVE</div>
+        <div class="controls-header">
+            <button id="toggle-lock">Initialize Lock</button>
+            <div id="lock-status">INACTIVE</div>
+        </div>
+
+        <div class="color-picker-group">
+            <div class="color-node" id="node-black" onclick="updateTheme('#000000', this)"></div>
+            <div class="color-node" id="node-gray" onclick="updateTheme('#5c5c5c', this)"></div>
+            <div class="color-node" id="node-white" onclick="updateTheme('#ffffff', this)"></div>
+        </div>
+        
+        <div class="color-picker-group">
+            <div class="color-node" id="node-orange" onclick="updateTheme('#F49D00', this)"></div>
+            <div class="color-node" id="node-pink" onclick="updateTheme('#FF00FF', this)"></div>
+            <div class="color-node" id="node-purple" onclick="updateTheme('#9933FF', this)"></div>
+            <div class="color-node" id="node-blue" onclick="updateTheme('#00CCFF', this)"></div>
+            <div class="color-node" id="node-teal" onclick="updateTheme('#00CCCC', this)"></div>
+            <div class="color-node" id="node-lime" onclick="updateTheme('#80CC00', this)"></div>
+        </div>
     </div>
 
     <script>
-        /* --- Screen Wake Lock API Integration --- */
+        /* --- Screen Wake Lock API --- */
         let wakeLockRef = null;
         const statusDisplay = document.getElementById('lock-status');
         const actionBtn = document.getElementById('toggle-lock');
@@ -122,8 +171,6 @@
                 statusDisplay.textContent = 'ACTIVE';
                 actionBtn.textContent = 'Release Lock';
                 
-                // The OS can revoke the lock (e.g., low battery, tab backgrounded). 
-                // We must handle the release event.
                 wakeLockRef.addEventListener('release', () => {
                     statusDisplay.textContent = 'INACTIVE';
                     actionBtn.textContent = 'Initialize Lock';
@@ -135,31 +182,33 @@
             }
         }
 
-        function handleWakeLockToggle() {
-            if (wakeLockRef !== null) {
-                wakeLockRef.release();
-            } else {
-                acquireWakeLock();
-            }
-        }
+        actionBtn.addEventListener('click', () => {
+            wakeLockRef !== null ? wakeLockRef.release() : acquireWakeLock();
+        });
 
-        actionBtn.addEventListener('click', handleWakeLockToggle);
-
-        // Re-acquire lock automatically when the PWA is brought back to the foreground
         document.addEventListener('visibilitychange', async () => {
             if (wakeLockRef !== null && document.visibilityState === 'visible') {
                 await acquireWakeLock();
             }
         });
 
-        /* --- Generative Rendering Engine --- */
+        /* --- Rendering Engine & Contrast Calculation --- */
         const canvas = document.getElementById('generative-surface');
         const ctx = canvas.getContext('2d');
         let entities = [];
-        let currentThemeHex = '#000000';
+        let contrastMode = 'light'; 
+
+        // Calculates perceptual luminance to determine text/wireframe contrast
+        function calculateContrastMode(hex) {
+            hex = hex.replace('#', '');
+            const r = parseInt(hex.substr(0, 2), 16);
+            const g = parseInt(hex.substr(2, 2), 16);
+            const b = parseInt(hex.substr(4, 2), 16);
+            const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+            return luminance > 0.5 ? 'dark' : 'light';
+        }
 
         function syncCanvasDimensions() {
-            // Adjust for high DPI displays
             const dpr = window.devicePixelRatio || 1;
             canvas.width = window.innerWidth * dpr;
             canvas.height = window.innerHeight * dpr;
@@ -174,43 +223,38 @@
             constructor() {
                 this.x = Math.random() * window.innerWidth;
                 this.y = Math.random() * window.innerHeight;
-                this.vx = (Math.random() - 0.5) * 1.2;
-                this.vy = (Math.random() - 0.5) * 1.2;
+                this.vx = (Math.random() - 0.5) * 1.6;
+                this.vy = (Math.random() - 0.5) * 1.6;
                 this.mass = Math.random() * 2 + 0.5;
             }
             computePhysics() {
                 this.x += this.vx;
                 this.y += this.vy;
-                
-                // Boundary collision inversion
                 if (this.x < 0 || this.x > window.innerWidth) this.vx *= -1;
                 if (this.y < 0 || this.y > window.innerHeight) this.vy *= -1;
             }
-            render(context, inverseColor) {
+            render(context, entityColor) {
                 context.beginPath();
                 context.arc(this.x, this.y, this.mass, 0, Math.PI * 2);
-                context.fillStyle = inverseColor;
+                context.fillStyle = entityColor;
                 context.fill();
             }
         }
 
-        // Initialize entity pool
-        const entityCount = window.innerWidth < 768 ? 60 : 120;
+        const entityCount = window.innerWidth < 600 ? 60 : 120;
         for (let i = 0; i < entityCount; i++) entities.push(new KineticEntity());
 
         function renderLoop() {
             ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
             
-            // Dynamic contrast logic based on selected hex
-            const isLightBackground = currentThemeHex === '#ffffff';
-            const nodeColor = isLightBackground ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.6)';
+            const isDarkMesh = contrastMode === 'dark';
+            const nodeColor = isDarkMesh ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.6)';
 
             entities.forEach(entity => {
                 entity.computePhysics();
                 entity.render(ctx, nodeColor);
             });
 
-            // Proximity networking calculations
             const connectionDistance = 140;
             for (let i = 0; i < entities.length; i++) {
                 for (let j = i + 1; j < entities.length; j++) {
@@ -223,7 +267,7 @@
                         const opacity = 1 - (distance / connectionDistance);
                         
                         ctx.beginPath();
-                        ctx.strokeStyle = isLightBackground 
+                        ctx.strokeStyle = isDarkMesh 
                             ? `rgba(0,0,0,${opacity * 0.5})` 
                             : `rgba(255,255,255,${opacity * 0.5})`;
                         ctx.lineWidth = 0.8;
@@ -238,45 +282,50 @@
         renderLoop();
 
         /* --- Theme Management --- */
-        window.updateTheme = function(hexColor) {
-            currentThemeHex = hexColor;
+        window.updateTheme = function(hexColor, pickerNode) {
             document.body.style.backgroundColor = hexColor;
+            contrastMode = calculateContrastMode(hexColor);
             
-            // Update meta theme color dynamically for the PWA frame
             const metaTheme = document.querySelector('meta[name="theme-color"]');
             if(metaTheme) metaTheme.setAttribute('content', hexColor);
+
+            // Apply explicit contrast rules to UI layer to prevent blending
+            const isDarkText = contrastMode === 'dark';
+            const uiColor = isDarkText ? '#000000' : '#ffffff';
+            const uiBorder = isDarkText ? 'rgba(0, 0, 0, 0.4)' : 'rgba(255, 255, 255, 0.4)';
+            
+            document.getElementById('lock-status').style.color = uiColor;
+            actionBtn.style.color = uiColor;
+            actionBtn.style.borderColor = uiBorder;
+            
+            document.querySelectorAll('.color-node').forEach(node => {
+                node.style.borderColor = uiBorder;
+                node.style.boxShadow = 'none';
+            });
+            
+            if (pickerNode) {
+                pickerNode.style.borderColor = uiColor;
+                pickerNode.style.boxShadow = `0 0 10px ${isDarkText ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)'}`;
+            }
         };
 
-        /* --- Dynamic Service Worker Initialization --- */
+        window.onload = () => updateTheme('#000000', document.getElementById('node-black'));
+
+        /* --- PWA Service Worker --- */
         const serviceWorkerLogic = `
-            const CACHE_ID = 'kinetic-pwa-v1';
-            self.addEventListener('install', event => {
-                self.skipWaiting();
-            });
-            self.addEventListener('activate', event => {
-                event.waitUntil(clients.claim());
-            });
+            self.addEventListener('install', event => self.skipWaiting());
+            self.addEventListener('activate', event => event.waitUntil(clients.claim()));
             self.addEventListener('fetch', event => {
-                // Network-first strategy for a single-file construct
                 event.respondWith(
-                    fetch(event.request).catch(() => {
-                        return new Response('Application operates fully in offline mode via local cache.');
-                    })
+                    fetch(event.request).catch(() => new Response('Offline Mode Active'))
                 );
             });
         `;
-        const swBlobData = new Blob([serviceWorkerLogic], {type: 'application/javascript'});
-        const swObjectUrl = URL.createObjectURL(swBlobData);
-
+        const swBlob = new Blob([serviceWorkerLogic], {type: 'application/javascript'});
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register(swObjectUrl, { scope: '/' })
-                .then(registration => {
-                    console.log('Virtual ServiceWorker registered.');
-                })
-                .catch(error => {
-                    console.error('ServiceWorker registration failed:', error);
-                });
+                navigator.serviceWorker.register(URL.createObjectURL(swBlob), { scope: '/' })
+                .catch(err => console.error('SW Error:', err));
             });
         }
     </script>
