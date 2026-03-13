@@ -32,7 +32,6 @@
             overflow: hidden;
             background-color: #000000;
             font-family: system-ui, -apple-system, sans-serif;
-            transition: background-color 0.8s cubic-bezier(0.4, 0, 0.2, 1);
             color: #ffffff;
         }
         
@@ -58,11 +57,11 @@
             border-radius: 30px;
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
             border: 1px solid rgba(255, 255, 255, 0.1);
             z-index: 10;
             width: fit-content;
-            min-width: 280px;
+            min-width: 300px;
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
@@ -86,7 +85,7 @@
             transition: color 0.3s ease;
         }
         
-        button#toggle-lock {
+        button.action-btn {
             background: transparent;
             border: 1px solid rgba(255, 255, 255, 0.4);
             padding: 8px 16px;
@@ -95,6 +94,12 @@
             font-family: inherit;
             font-weight: 500;
             transition: all 0.3s ease;
+            color: #ffffff;
+        }
+
+        button.action-btn.active {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.8);
         }
 
         button#panel-toggle {
@@ -112,14 +117,14 @@
             justify-content: center;
             transition: all 0.3s ease, transform 0.3s ease;
             line-height: 1;
+            color: #ffffff;
         }
 
-        /* Fluid container for the color options */
-        #color-palette-container {
+        #expanded-controls-container {
             display: flex;
             flex-direction: column;
             gap: 15px;
-            max-height: 100px; /* Baseline for open state */
+            max-height: 250px; 
             opacity: 1;
             margin-top: 15px;
             overflow: hidden;
@@ -128,10 +133,55 @@
                         margin-top 0.4s ease;
         }
 
-        #color-palette-container.collapsed {
+        #expanded-controls-container.collapsed {
             max-height: 0;
             opacity: 0;
             margin-top: 0;
+        }
+
+        .control-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+        }
+
+        .slider-container {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            gap: 5px;
+            align-items: center;
+        }
+
+        .slider-container label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 90%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: currentColor;
+            cursor: pointer;
+            margin-top: -6px;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: rgba(128, 128, 128, 0.5);
+            border-radius: 2px;
         }
 
         .color-picker-group {
@@ -167,7 +217,7 @@
         @media (max-width: 600px) {
             .color-picker-group { gap: 10px; }
             .color-node { width: 22px; height: 22px; }
-            #ui-layer { min-width: 250px; padding: 12px 20px; }
+            #ui-layer { min-width: 260px; padding: 12px 20px; }
         }
     </style>
 </head>
@@ -177,13 +227,23 @@
     <div id="ui-layer">
         <div class="controls-header">
             <div class="lock-group">
-                <button id="toggle-lock">Initialize Lock</button>
+                <button id="toggle-lock" class="action-btn">Initialize Lock</button>
                 <div id="lock-status">INACTIVE</div>
             </div>
             <button id="panel-toggle" onclick="togglePalette()">-</button>
         </div>
 
-        <div id="color-palette-container">
+        <div id="expanded-controls-container">
+            <div class="control-row">
+                <button id="btn-wireframe" class="action-btn" onclick="setEngineMode('wireframe')">Wireframe</button>
+                <button id="btn-matrix" class="action-btn active" onclick="setEngineMode('matrix')">Matrix</button>
+            </div>
+
+            <div class="control-row slider-container">
+                <label id="speed-label">Kinetic Velocity</label>
+                <input type="range" id="speed-slider" min="0.1" max="3.0" step="0.1" value="1.0" oninput="updateSpeedMultiplier(this.value)">
+            </div>
+
             <div class="color-picker-group">
                 <div class="color-node" id="node-black" onclick="updateTheme('#000000', this)"></div>
                 <div class="color-node" id="node-gray" onclick="updateTheme('#5c5c5c', this)"></div>
@@ -202,8 +262,18 @@
     </div>
 
     <script>
-        /* --- Screen Wake Lock API --- */
+        /* --- State & API Integrations --- */
         let wakeLockRef = null;
+        let activeEngine = 'matrix';
+        let speedMultiplier = 1.0;
+        let contrastMode = 'dark'; 
+        let currentRgb = { r: 0, g: 0, b: 0 };
+        let isPaletteOpen = true;
+
+        const canvas = document.getElementById('generative-surface');
+        const ctx = canvas.getContext('2d');
+
+        /* --- Wake Lock --- */
         const statusDisplay = document.getElementById('lock-status');
         const actionBtn = document.getElementById('toggle-lock');
 
@@ -216,7 +286,6 @@
                 wakeLockRef = await navigator.wakeLock.request('screen');
                 statusDisplay.textContent = 'ACTIVE';
                 actionBtn.textContent = 'Release Lock';
-                
                 wakeLockRef.addEventListener('release', () => {
                     statusDisplay.textContent = 'INACTIVE';
                     actionBtn.textContent = 'Initialize Lock';
@@ -228,24 +297,16 @@
             }
         }
 
-        actionBtn.addEventListener('click', () => {
-            wakeLockRef !== null ? wakeLockRef.release() : acquireWakeLock();
-        });
-
+        actionBtn.addEventListener('click', () => wakeLockRef !== null ? wakeLockRef.release() : acquireWakeLock());
         document.addEventListener('visibilitychange', async () => {
-            if (wakeLockRef !== null && document.visibilityState === 'visible') {
-                await acquireWakeLock();
-            }
+            if (wakeLockRef !== null && document.visibilityState === 'visible') await acquireWakeLock();
         });
 
-        /* --- UI State Management --- */
-        let isPaletteOpen = true;
+        /* --- UI Management --- */
         function togglePalette() {
-            const container = document.getElementById('color-palette-container');
+            const container = document.getElementById('expanded-controls-container');
             const toggleBtn = document.getElementById('panel-toggle');
-            
             isPaletteOpen = !isPaletteOpen;
-            
             if (isPaletteOpen) {
                 container.classList.remove('collapsed');
                 toggleBtn.textContent = '-';
@@ -255,17 +316,34 @@
             }
         }
 
-        /* --- Rendering Engine & Contrast Calculation --- */
-        const canvas = document.getElementById('generative-surface');
-        const ctx = canvas.getContext('2d');
-        let entities = [];
-        let contrastMode = 'light'; 
+        function updateSpeedMultiplier(val) {
+            speedMultiplier = parseFloat(val);
+        }
 
-        function calculateContrastMode(hex) {
+        function setEngineMode(mode) {
+            activeEngine = mode;
+            document.getElementById('btn-wireframe').classList.toggle('active', mode === 'wireframe');
+            document.getElementById('btn-matrix').classList.toggle('active', mode === 'matrix');
+            
+            // Flush canvas to prevent rendering artifacts during mode transitions
+            ctx.fillStyle = `rgb(${currentRgb.r}, ${currentRgb.g}, ${currentRgb.b})`;
+            ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+
+            if (mode === 'matrix') initMatrix();
+        }
+
+        /* --- Shared Utilities --- */
+        function hexToRgb(hex) {
             hex = hex.replace('#', '');
-            const r = parseInt(hex.substr(0, 2), 16);
-            const g = parseInt(hex.substr(2, 2), 16);
-            const b = parseInt(hex.substr(4, 2), 16);
+            if (hex.length === 3) hex = hex.split('').map(x => x + x).join('');
+            return {
+                r: parseInt(hex.substring(0, 2), 16),
+                g: parseInt(hex.substring(2, 4), 16),
+                b: parseInt(hex.substring(4, 6), 16)
+            };
+        }
+
+        function calculateContrastMode(r, g, b) {
             const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
             return luminance > 0.5 ? 'dark' : 'light';
         }
@@ -277,10 +355,17 @@
             ctx.scale(dpr, dpr);
             canvas.style.width = `${window.innerWidth}px`;
             canvas.style.height = `${window.innerHeight}px`;
+            
+            initMatrix(); // Recalculate column constraints
+            initWireframe(); // Respawn entities to fit bounds
+            
+            ctx.fillStyle = `rgb(${currentRgb.r}, ${currentRgb.g}, ${currentRgb.b})`;
+            ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
         }
         window.addEventListener('resize', syncCanvasDimensions);
-        syncCanvasDimensions();
 
+        /* --- Wireframe Engine --- */
+        let entities = [];
         class KineticEntity {
             constructor() {
                 this.x = Math.random() * window.innerWidth;
@@ -290,8 +375,8 @@
                 this.mass = Math.random() * 2 + 0.5;
             }
             computePhysics() {
-                this.x += this.vx;
-                this.y += this.vy;
+                this.x += this.vx * speedMultiplier;
+                this.y += this.vy * speedMultiplier;
                 if (this.x < 0 || this.x > window.innerWidth) this.vx *= -1;
                 if (this.y < 0 || this.y > window.innerHeight) this.vy *= -1;
             }
@@ -303,10 +388,14 @@
             }
         }
 
-        const entityCount = window.innerWidth < 600 ? 60 : 120;
-        for (let i = 0; i < entityCount; i++) entities.push(new KineticEntity());
+        function initWireframe() {
+            entities = [];
+            const entityCount = window.innerWidth < 600 ? 50 : 100;
+            for (let i = 0; i < entityCount; i++) entities.push(new KineticEntity());
+        }
 
-        function renderLoop() {
+        function renderWireframeFrame() {
+            // Destructive clear required for vectors
             ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
             
             const isDarkMesh = contrastMode === 'dark';
@@ -339,14 +428,56 @@
                     }
                 }
             }
+        }
+
+        /* --- Matrix Engine --- */
+        const charset = 'アァカサタナハマヤャラワガザダバパイィキシチニヒミリヰギジヂビピウゥクスツヌフムユュルグズブヅプエェケセテネヘメレゲゼデベペオォコソトノホモヨョロゴゾドボポヴッン0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+        const fontSize = 16;
+        let drops = [];
+
+        function initMatrix() {
+            const columns = Math.floor(window.innerWidth / fontSize) + 1;
+            drops = [];
+            for (let x = 0; x < columns; x++) drops[x] = (Math.random() * -100);
+        }
+
+        function renderMatrixFrame() {
+            // Constructive compositing decay
+            ctx.fillStyle = `rgba(${currentRgb.r}, ${currentRgb.g}, ${currentRgb.b}, 0.08)`;
+            ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+
+            ctx.fillStyle = contrastMode === 'dark' ? '#000000' : '#ffffff';
+            ctx.font = `${fontSize}px monospace`;
+
+            for (let i = 0; i < drops.length; i++) {
+                if (drops[i] * fontSize >= 0) {
+                    const text = charset[Math.floor(Math.random() * charset.length)];
+                    ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+                }
+                
+                if (drops[i] * fontSize > window.innerHeight && Math.random() > 0.975) drops[i] = 0;
+                
+                // Temporal mutation applied to index progression
+                drops[i] += (0.8 * speedMultiplier); 
+            }
+        }
+
+        /* --- Multiplexed Rendering Loop --- */
+        function renderLoop() {
+            if (activeEngine === 'wireframe') {
+                renderWireframeFrame();
+            } else {
+                renderMatrixFrame();
+            }
             requestAnimationFrame(renderLoop);
         }
-        renderLoop();
 
         /* --- Theme Management --- */
         window.updateTheme = function(hexColor, pickerNode) {
+            currentRgb = hexToRgb(hexColor);
+            contrastMode = calculateContrastMode(currentRgb.r, currentRgb.g, currentRgb.b);
+            
             document.body.style.backgroundColor = hexColor;
-            contrastMode = calculateContrastMode(hexColor);
             
             const metaTheme = document.querySelector('meta[name="theme-color"]');
             if(metaTheme) metaTheme.setAttribute('content', hexColor);
@@ -355,10 +486,14 @@
             const uiColor = isDarkText ? '#000000' : '#ffffff';
             const uiBorder = isDarkText ? 'rgba(0, 0, 0, 0.4)' : 'rgba(255, 255, 255, 0.4)';
             
+            // Sync text and UI boundaries with perceptual contrast
             document.getElementById('lock-status').style.color = uiColor;
+            document.getElementById('speed-label').style.color = uiColor;
             
-            // Sync buttons with contrast
-            [actionBtn, document.getElementById('panel-toggle')].forEach(btn => {
+            // Target the slider thumb pseudo-element styling via variable inheritance
+            document.getElementById('speed-slider').style.color = uiColor; 
+
+            document.querySelectorAll('.action-btn, #panel-toggle').forEach(btn => {
                 btn.style.color = uiColor;
                 btn.style.borderColor = uiBorder;
             });
@@ -372,11 +507,19 @@
                 pickerNode.style.borderColor = uiColor;
                 pickerNode.style.boxShadow = `0 0 10px ${isDarkText ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)'}`;
             }
+
+            // Flush context buffer to immediately commit background transition
+            ctx.fillStyle = hexColor;
+            ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
         };
 
-        window.onload = () => updateTheme('#000000', document.getElementById('node-black'));
+        // Bootstrap sequence
+        initWireframe();
+        syncCanvasDimensions();
+        updateTheme('#000000', document.getElementById('node-black'));
+        renderLoop();
 
-        /* --- PWA Service Worker --- */
+        /* --- Offline Service Worker --- */
         const serviceWorkerLogic = `
             self.addEventListener('install', event => self.skipWaiting());
             self.addEventListener('activate', event => event.waitUntil(clients.claim()));
