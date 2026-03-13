@@ -53,45 +53,85 @@
             transform: translateX(-50%);
             display: flex;
             flex-direction: column;
-            gap: 15px;
             background: rgba(128, 128, 128, 0.15);
             padding: 15px 25px;
-            border-radius: 40px;
+            border-radius: 30px;
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
-            align-items: center;
             box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
             border: 1px solid rgba(255, 255, 255, 0.1);
             z-index: 10;
             width: fit-content;
+            min-width: 280px;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .controls-header {
             display: flex;
-            gap: 15px;
             align-items: center;
-            justify-content: center;
+            justify-content: space-between;
             width: 100%;
-            margin-bottom: 5px;
+        }
+
+        .lock-group {
+            display: flex;
+            align-items: center;
+            gap: 15px;
         }
 
         #lock-status {
             font-size: 13px;
             font-weight: 600;
             letter-spacing: 1.5px;
-            padding: 0 10px;
             transition: color 0.3s ease;
         }
         
         button#toggle-lock {
             background: transparent;
             border: 1px solid rgba(255, 255, 255, 0.4);
-            padding: 10px 20px;
+            padding: 8px 16px;
             border-radius: 20px;
             cursor: pointer;
             font-family: inherit;
             font-weight: 500;
             transition: all 0.3s ease;
+        }
+
+        button#panel-toggle {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-family: monospace;
+            font-size: 18px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease, transform 0.3s ease;
+            line-height: 1;
+        }
+
+        /* Fluid container for the color options */
+        #color-palette-container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            max-height: 100px; /* Baseline for open state */
+            opacity: 1;
+            margin-top: 15px;
+            overflow: hidden;
+            transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
+                        opacity 0.3s ease, 
+                        margin-top 0.4s ease;
+        }
+
+        #color-palette-container.collapsed {
+            max-height: 0;
+            opacity: 0;
+            margin-top: 0;
         }
 
         .color-picker-group {
@@ -126,7 +166,8 @@
 
         @media (max-width: 600px) {
             .color-picker-group { gap: 10px; }
-            .color-node { width: 20px; height: 20px; }
+            .color-node { width: 22px; height: 22px; }
+            #ui-layer { min-width: 250px; padding: 12px 20px; }
         }
     </style>
 </head>
@@ -135,23 +176,28 @@
     
     <div id="ui-layer">
         <div class="controls-header">
-            <button id="toggle-lock">Initialize Lock</button>
-            <div id="lock-status">INACTIVE</div>
+            <div class="lock-group">
+                <button id="toggle-lock">Initialize Lock</button>
+                <div id="lock-status">INACTIVE</div>
+            </div>
+            <button id="panel-toggle" onclick="togglePalette()">-</button>
         </div>
 
-        <div class="color-picker-group">
-            <div class="color-node" id="node-black" onclick="updateTheme('#000000', this)"></div>
-            <div class="color-node" id="node-gray" onclick="updateTheme('#5c5c5c', this)"></div>
-            <div class="color-node" id="node-white" onclick="updateTheme('#ffffff', this)"></div>
-        </div>
-        
-        <div class="color-picker-group">
-            <div class="color-node" id="node-orange" onclick="updateTheme('#F49D00', this)"></div>
-            <div class="color-node" id="node-pink" onclick="updateTheme('#FF00FF', this)"></div>
-            <div class="color-node" id="node-purple" onclick="updateTheme('#9933FF', this)"></div>
-            <div class="color-node" id="node-blue" onclick="updateTheme('#00CCFF', this)"></div>
-            <div class="color-node" id="node-teal" onclick="updateTheme('#00CCCC', this)"></div>
-            <div class="color-node" id="node-lime" onclick="updateTheme('#80CC00', this)"></div>
+        <div id="color-palette-container">
+            <div class="color-picker-group">
+                <div class="color-node" id="node-black" onclick="updateTheme('#000000', this)"></div>
+                <div class="color-node" id="node-gray" onclick="updateTheme('#5c5c5c', this)"></div>
+                <div class="color-node" id="node-white" onclick="updateTheme('#ffffff', this)"></div>
+            </div>
+            
+            <div class="color-picker-group">
+                <div class="color-node" id="node-orange" onclick="updateTheme('#F49D00', this)"></div>
+                <div class="color-node" id="node-pink" onclick="updateTheme('#FF00FF', this)"></div>
+                <div class="color-node" id="node-purple" onclick="updateTheme('#9933FF', this)"></div>
+                <div class="color-node" id="node-blue" onclick="updateTheme('#00CCFF', this)"></div>
+                <div class="color-node" id="node-teal" onclick="updateTheme('#00CCCC', this)"></div>
+                <div class="color-node" id="node-lime" onclick="updateTheme('#80CC00', this)"></div>
+            </div>
         </div>
     </div>
 
@@ -192,13 +238,29 @@
             }
         });
 
+        /* --- UI State Management --- */
+        let isPaletteOpen = true;
+        function togglePalette() {
+            const container = document.getElementById('color-palette-container');
+            const toggleBtn = document.getElementById('panel-toggle');
+            
+            isPaletteOpen = !isPaletteOpen;
+            
+            if (isPaletteOpen) {
+                container.classList.remove('collapsed');
+                toggleBtn.textContent = '-';
+            } else {
+                container.classList.add('collapsed');
+                toggleBtn.textContent = '+';
+            }
+        }
+
         /* --- Rendering Engine & Contrast Calculation --- */
         const canvas = document.getElementById('generative-surface');
         const ctx = canvas.getContext('2d');
         let entities = [];
         let contrastMode = 'light'; 
 
-        // Calculates perceptual luminance to determine text/wireframe contrast
         function calculateContrastMode(hex) {
             hex = hex.replace('#', '');
             const r = parseInt(hex.substr(0, 2), 16);
@@ -289,14 +351,17 @@
             const metaTheme = document.querySelector('meta[name="theme-color"]');
             if(metaTheme) metaTheme.setAttribute('content', hexColor);
 
-            // Apply explicit contrast rules to UI layer to prevent blending
             const isDarkText = contrastMode === 'dark';
             const uiColor = isDarkText ? '#000000' : '#ffffff';
             const uiBorder = isDarkText ? 'rgba(0, 0, 0, 0.4)' : 'rgba(255, 255, 255, 0.4)';
             
             document.getElementById('lock-status').style.color = uiColor;
-            actionBtn.style.color = uiColor;
-            actionBtn.style.borderColor = uiBorder;
+            
+            // Sync buttons with contrast
+            [actionBtn, document.getElementById('panel-toggle')].forEach(btn => {
+                btn.style.color = uiColor;
+                btn.style.borderColor = uiBorder;
+            });
             
             document.querySelectorAll('.color-node').forEach(node => {
                 node.style.borderColor = uiBorder;
