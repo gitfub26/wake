@@ -227,21 +227,21 @@
     <div id="ui-layer">
         <div class="controls-header">
             <div class="lock-group">
-                <button id="toggle-lock" class="action-btn">Initialize Lock</button>
-                <div id="lock-status">INACTIVE</div>
+                <button id="toggle-lock" class="action-btn">Terminate Lock</button>
+                <div id="lock-status">INITIALIZING</div>
             </div>
-            <button id="panel-toggle" onclick="togglePalette()">-</button>
+            <button id="panel-toggle" onclick="togglePalette()">+</button>
         </div>
 
-        <div id="expanded-controls-container">
+        <div id="expanded-controls-container" class="collapsed">
             <div class="control-row">
                 <button id="btn-wireframe" class="action-btn" onclick="setEngineMode('wireframe')">Wireframe</button>
                 <button id="btn-matrix" class="action-btn active" onclick="setEngineMode('matrix')">Matrix</button>
             </div>
 
             <div class="control-row slider-container">
-                <label id="speed-label">Kinetic Velocity</label>
-                <input type="range" id="speed-slider" min="0.1" max="3.0" step="0.1" value="1.0" oninput="updateSpeedMultiplier(this.value)">
+                <label id="speed-label">Velocity Constraint: <span id="speed-readout">25%</span></label>
+                <input type="range" id="speed-slider" min="1" max="100" step="1" value="25" oninput="updateSpeedMultiplier(this.value)">
             </div>
 
             <div class="color-picker-group">
@@ -265,35 +265,37 @@
         /* --- State & API Integrations --- */
         let wakeLockRef = null;
         let activeEngine = 'matrix';
-        let speedMultiplier = 1.0;
+        let speedMultiplier = 0.75; // Pre-calculated 25% of the 3.0 maximum
         let contrastMode = 'dark'; 
         let currentRgb = { r: 0, g: 0, b: 0 };
-        let isPaletteOpen = true;
+        let isPaletteOpen = false; // Initialized strictly closed
 
         const canvas = document.getElementById('generative-surface');
         const ctx = canvas.getContext('2d');
 
-        /* --- Wake Lock --- */
+        /* --- Wake Lock Management --- */
         const statusDisplay = document.getElementById('lock-status');
         const actionBtn = document.getElementById('toggle-lock');
 
         async function acquireWakeLock() {
             if (!('wakeLock' in navigator)) {
                 statusDisplay.textContent = 'UNSUPPORTED';
+                actionBtn.style.display = 'none';
                 return;
             }
             try {
                 wakeLockRef = await navigator.wakeLock.request('screen');
                 statusDisplay.textContent = 'ACTIVE';
-                actionBtn.textContent = 'Release Lock';
+                actionBtn.textContent = 'Terminate Lock';
                 wakeLockRef.addEventListener('release', () => {
                     statusDisplay.textContent = 'INACTIVE';
                     actionBtn.textContent = 'Initialize Lock';
                     wakeLockRef = null;
                 });
             } catch (err) {
-                statusDisplay.textContent = 'ERROR';
-                console.error(`Wake Lock Error: ${err.name}, ${err.message}`);
+                statusDisplay.textContent = 'REJECTED';
+                actionBtn.textContent = 'Initialize Lock';
+                console.warn(`Initial automated lock request rejected by browser heuristics: ${err.message}`);
             }
         }
 
@@ -316,8 +318,10 @@
             }
         }
 
-        function updateSpeedMultiplier(val) {
-            speedMultiplier = parseFloat(val);
+        function updateSpeedMultiplier(percentageVal) {
+            document.getElementById('speed-readout').textContent = `${percentageVal}%`;
+            // Normalizing 1-100 to a 0.03 - 3.0 scalar coefficient
+            speedMultiplier = (parseInt(percentageVal) / 100) * 3.0;
         }
 
         function setEngineMode(mode) {
@@ -325,7 +329,6 @@
             document.getElementById('btn-wireframe').classList.toggle('active', mode === 'wireframe');
             document.getElementById('btn-matrix').classList.toggle('active', mode === 'matrix');
             
-            // Flush canvas to prevent rendering artifacts during mode transitions
             ctx.fillStyle = `rgb(${currentRgb.r}, ${currentRgb.g}, ${currentRgb.b})`;
             ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
 
@@ -356,8 +359,8 @@
             canvas.style.width = `${window.innerWidth}px`;
             canvas.style.height = `${window.innerHeight}px`;
             
-            initMatrix(); // Recalculate column constraints
-            initWireframe(); // Respawn entities to fit bounds
+            initMatrix();
+            initWireframe();
             
             ctx.fillStyle = `rgb(${currentRgb.r}, ${currentRgb.g}, ${currentRgb.b})`;
             ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
@@ -395,7 +398,6 @@
         }
 
         function renderWireframeFrame() {
-            // Destructive clear required for vectors
             ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
             
             const isDarkMesh = contrastMode === 'dark';
@@ -442,7 +444,6 @@
         }
 
         function renderMatrixFrame() {
-            // Constructive compositing decay
             ctx.fillStyle = `rgba(${currentRgb.r}, ${currentRgb.g}, ${currentRgb.b}, 0.08)`;
             ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
 
@@ -457,7 +458,6 @@
                 
                 if (drops[i] * fontSize > window.innerHeight && Math.random() > 0.975) drops[i] = 0;
                 
-                // Temporal mutation applied to index progression
                 drops[i] += (0.8 * speedMultiplier); 
             }
         }
@@ -486,11 +486,8 @@
             const uiColor = isDarkText ? '#000000' : '#ffffff';
             const uiBorder = isDarkText ? 'rgba(0, 0, 0, 0.4)' : 'rgba(255, 255, 255, 0.4)';
             
-            // Sync text and UI boundaries with perceptual contrast
             document.getElementById('lock-status').style.color = uiColor;
             document.getElementById('speed-label').style.color = uiColor;
-            
-            // Target the slider thumb pseudo-element styling via variable inheritance
             document.getElementById('speed-slider').style.color = uiColor; 
 
             document.querySelectorAll('.action-btn, #panel-toggle').forEach(btn => {
@@ -508,16 +505,22 @@
                 pickerNode.style.boxShadow = `0 0 10px ${isDarkText ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)'}`;
             }
 
-            // Flush context buffer to immediately commit background transition
             ctx.fillStyle = hexColor;
             ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
         };
 
-        // Bootstrap sequence
-        initWireframe();
-        syncCanvasDimensions();
-        updateTheme('#000000', document.getElementById('node-black'));
-        renderLoop();
+        /* --- Bootstrap Sequence --- */
+        window.addEventListener('load', () => {
+            initWireframe();
+            syncCanvasDimensions();
+            updateTheme('#000000', document.getElementById('node-black'));
+            
+            // Aggressive automated lock acquisition
+            acquireWakeLock();
+            
+            // Initialize rendering pipeline
+            requestAnimationFrame(renderLoop);
+        });
 
         /* --- Offline Service Worker --- */
         const serviceWorkerLogic = `
