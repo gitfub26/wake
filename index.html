@@ -3,18 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#000000">
-    <title>Kinetic Wake Lock PWA</title>
+    <meta name="theme-color" content="#10141d">
+    <title>Kinetic Wake Lock PWA - Dynamic Architectures</title>
     <script>
         const manifest = {
-            "name": "Kinetic Wake Lock PWA",
+            "name": "Kinetic Engine PWA",
             "short_name": "Kinetic",
             "start_url": window.location.href,
             "display": "standalone",
             "background_color": "#000000",
             "theme_color": "#000000",
             "icons": [{
-                "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%235c5c5c'/%3E%3C/svg%3E",
+                "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%23ffffff'/%3E%3C/svg%3E",
                 "sizes": "192x192",
                 "type": "image/svg+xml"
             }]
@@ -30,9 +30,10 @@
             width: 100%;
             height: 100%;
             overflow: hidden;
-            background-color: #000000;
+            background: #000000;
             font-family: system-ui, -apple-system, sans-serif;
             color: #ffffff;
+            transition: background 0.6s cubic-bezier(0.4, 0, 0.2, 1);
         }
         
         canvas {
@@ -55,13 +56,13 @@
             background: rgba(128, 128, 128, 0.15);
             padding: 15px 25px;
             border-radius: 30px;
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
             box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
             border: 1px solid rgba(255, 255, 255, 0.1);
             z-index: 10;
             width: fit-content;
-            min-width: 300px;
+            min-width: 320px;
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
@@ -94,12 +95,13 @@
             font-family: inherit;
             font-weight: 500;
             transition: all 0.3s ease;
-            color: #ffffff;
+            color: inherit;
         }
 
         button.action-btn.active {
             background: rgba(255, 255, 255, 0.2);
             border-color: rgba(255, 255, 255, 0.8);
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
         }
 
         button#panel-toggle {
@@ -115,28 +117,31 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.3s ease, transform 0.3s ease;
+            transition: all 0.3s ease;
             line-height: 1;
-            color: #ffffff;
+            color: inherit;
         }
 
         #expanded-controls-container {
             display: flex;
             flex-direction: column;
             gap: 15px;
-            max-height: 250px; 
+            max-height: 400px; 
             opacity: 1;
             margin-top: 15px;
-            overflow: hidden;
+            overflow-y: auto;
+            overflow-x: hidden;
             transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
                         opacity 0.3s ease, 
                         margin-top 0.4s ease;
+            padding-bottom: 5px;
         }
 
         #expanded-controls-container.collapsed {
             max-height: 0;
             opacity: 0;
             margin-top: 0;
+            padding-bottom: 0;
         }
 
         .control-row {
@@ -160,6 +165,7 @@
             text-transform: uppercase;
             letter-spacing: 1px;
             font-weight: 600;
+            transition: color 0.3s ease;
         }
 
         input[type=range] {
@@ -186,15 +192,15 @@
 
         .color-picker-group {
             display: flex;
-            gap: 15px;
+            gap: 10px;
+            flex-wrap: wrap;
             align-items: center;
             justify-content: center;
             width: 100%;
+            padding-bottom: 5px;
         }
 
         .color-node {
-            width: 24px;
-            height: 24px;
             border-radius: 50%;
             border: 2px solid rgba(255, 255, 255, 0.4);
             cursor: pointer;
@@ -203,21 +209,41 @@
         .color-node:hover {
             transform: scale(1.2);
         }
+        .color-node.selected {
+            border-color: currentColor;
+            box-shadow: 0 0 12px currentColor;
+            transform: scale(1.1);
+        }
 
+        .solid-color-node { width: 28px; height: 28px; }
+        .gradient-color-node { width: 44px; height: 26px; border-radius: 13px; }
+
+        /* Solid mapping */
         #node-black { background-color: #000000; }
-        #node-gray { background-color: #5c5c5c; }
         #node-white { background-color: #ffffff; }
-        #node-orange { background-color: #F49D00; }
-        #node-pink { background-color: #FF00FF; }
-        #node-purple { background-color: #9933FF; }
-        #node-blue { background-color: #00CCFF; }
-        #node-teal { background-color: #00CCCC; }
-        #node-lime { background-color: #80CC00; }
+
+        /* Gradient mapping */
+        #node-grad1 { background: linear-gradient(135deg, #ef5350, #c62828); }
+        #node-grad2 { background: linear-gradient(135deg, #ffb74d, #f06292); }
+        #node-grad3 { background: linear-gradient(135deg, #4db6ac, #00897b); }
+        #node-grad4 { background: linear-gradient(135deg, #4fc3f7, #1565c0); }
+        #node-grad5 { background: linear-gradient(135deg, #90caf9, #7e57c2); }
+        #node-grad6 { background: linear-gradient(135deg, #ba68c8, #f06292); }
+        #node-grad7 { background: linear-gradient(135deg, #aed581, #fff176); }
+        #node-grad8 { background: linear-gradient(135deg, #ffd54f, #ffb300); }
+        #node-grad9 { background: linear-gradient(135deg, #ffb74d, #e65100); }
+        #node-grad10 { background: linear-gradient(135deg, #4dd0e1, #29b6f6); }
+
+        .divider {
+            width: 100%;
+            height: 1px;
+            background: rgba(128, 128, 128, 0.3);
+            margin: 5px 0;
+        }
 
         @media (max-width: 600px) {
-            .color-picker-group { gap: 10px; }
-            .color-node { width: 22px; height: 22px; }
-            #ui-layer { min-width: 260px; padding: 12px 20px; }
+            #ui-layer { min-width: 280px; padding: 12px 20px; }
+            .gradient-color-node { width: 38px; height: 24px; }
         }
     </style>
 </head>
@@ -238,40 +264,61 @@
                 <button id="btn-wireframe" class="action-btn" onclick="setEngineMode('wireframe')">Wireframe</button>
                 <button id="btn-matrix" class="action-btn active" onclick="setEngineMode('matrix')">Matrix</button>
             </div>
-
             <div class="control-row slider-container">
                 <label id="speed-label">Velocity Constraint: <span id="speed-readout">25%</span></label>
                 <input type="range" id="speed-slider" min="1" max="100" step="1" value="25" oninput="updateSpeedMultiplier(this.value)">
             </div>
 
+            <div class="divider"></div>
+
+            <div class="control-row slider-container">
+                <label>Absolute Solidarity</label>
+            </div>
             <div class="color-picker-group">
-                <div class="color-node" id="node-black" onclick="updateTheme('#000000', this)"></div>
-                <div class="color-node" id="node-gray" onclick="updateTheme('#5c5c5c', this)"></div>
-                <div class="color-node" id="node-white" onclick="updateTheme('#ffffff', this)"></div>
+                <div class="color-node solid-color-node selected" id="node-black" onclick="updateTheme({type: 'solid', colors: ['#000000']}, this)"></div>
+                <div class="color-node solid-color-node" id="node-white" onclick="updateTheme({type: 'solid', colors: ['#ffffff']}, this)"></div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="control-row slider-container">
+                <label>Gradient Injection Target</label>
+            </div>
+            <div class="control-row">
+                <button id="btn-target-bg" class="action-btn active" onclick="setGradientTarget('background')">Background</button>
+                <button id="btn-target-fg" class="action-btn" onclick="setGradientTarget('foreground')">Entities</button>
             </div>
             
-            <div class="color-picker-group">
-                <div class="color-node" id="node-orange" onclick="updateTheme('#F49D00', this)"></div>
-                <div class="color-node" id="node-pink" onclick="updateTheme('#FF00FF', this)"></div>
-                <div class="color-node" id="node-purple" onclick="updateTheme('#9933FF', this)"></div>
-                <div class="color-node" id="node-blue" onclick="updateTheme('#00CCFF', this)"></div>
-                <div class="color-node" id="node-teal" onclick="updateTheme('#00CCCC', this)"></div>
-                <div class="color-node" id="node-lime" onclick="updateTheme('#80CC00', this)"></div>
+            <div class="color-picker-group" style="margin-top: 5px;">
+                <div class="color-node gradient-color-node" id="node-grad1" onclick="updateTheme({type: 'gradient', colors: ['#ef5350', '#c62828']}, this)"></div>
+                <div class="color-node gradient-color-node" id="node-grad2" onclick="updateTheme({type: 'gradient', colors: ['#ffb74d', '#f06292']}, this)"></div>
+                <div class="color-node gradient-color-node" id="node-grad3" onclick="updateTheme({type: 'gradient', colors: ['#4db6ac', '#00897b']}, this)"></div>
+                <div class="color-node gradient-color-node" id="node-grad4" onclick="updateTheme({type: 'gradient', colors: ['#4fc3f7', '#1565c0']}, this)"></div>
+                <div class="color-node gradient-color-node" id="node-grad5" onclick="updateTheme({type: 'gradient', colors: ['#90caf9', '#7e57c2']}, this)"></div>
+                <div class="color-node gradient-color-node" id="node-grad6" onclick="updateTheme({type: 'gradient', colors: ['#ba68c8', '#f06292']}, this)"></div>
+                <div class="color-node gradient-color-node" id="node-grad7" onclick="updateTheme({type: 'gradient', colors: ['#aed581', '#fff176']}, this)"></div>
+                <div class="color-node gradient-color-node" id="node-grad8" onclick="updateTheme({type: 'gradient', colors: ['#ffd54f', '#ffb300']}, this)"></div>
+                <div class="color-node gradient-color-node" id="node-grad9" onclick="updateTheme({type: 'gradient', colors: ['#ffb74d', '#e65100']}, this)"></div>
+                <div class="color-node gradient-color-node" id="node-grad10" onclick="updateTheme({type: 'gradient', colors: ['#4dd0e1', '#29b6f6']}, this)"></div>
             </div>
         </div>
     </div>
 
     <script>
-        /* --- State & API Integrations --- */
+        /* --- Core State Variables --- */
         let wakeLockRef = null;
         let activeEngine = 'matrix';
-        let speedMultiplier = 0.75; // Pre-calculated 25% of the 3.0 maximum
-        let contrastMode = 'dark'; 
-        let currentRgb = { r: 0, g: 0, b: 0 };
-        let isPaletteOpen = false; // Initialized strictly closed
+        let speedMultiplier = 0.75; 
+        let isPaletteOpen = false; 
+        let gradientTarget = 'background'; // 'background' or 'foreground'
+        
+        let currentTheme = {type: 'solid', colors: ['#000000']};
+        let canvasGradient = null;
+        let fgColorString = '#ffffff';
+        let isForegroundGradient = false;
 
         const canvas = document.getElementById('generative-surface');
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { alpha: true }); // Explicit alpha support for transparent clears
 
         /* --- Wake Lock Management --- */
         const statusDisplay = document.getElementById('lock-status');
@@ -295,7 +342,6 @@
             } catch (err) {
                 statusDisplay.textContent = 'REJECTED';
                 actionBtn.textContent = 'Initialize Lock';
-                console.warn(`Initial automated lock request rejected by browser heuristics: ${err.message}`);
             }
         }
 
@@ -320,7 +366,6 @@
 
         function updateSpeedMultiplier(percentageVal) {
             document.getElementById('speed-readout').textContent = `${percentageVal}%`;
-            // Normalizing 1-100 to a 0.03 - 3.0 scalar coefficient
             speedMultiplier = (parseInt(percentageVal) / 100) * 3.0;
         }
 
@@ -329,13 +374,20 @@
             document.getElementById('btn-wireframe').classList.toggle('active', mode === 'wireframe');
             document.getElementById('btn-matrix').classList.toggle('active', mode === 'matrix');
             
-            ctx.fillStyle = `rgb(${currentRgb.r}, ${currentRgb.g}, ${currentRgb.b})`;
-            ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
-
             if (mode === 'matrix') initMatrix();
         }
 
-        /* --- Shared Utilities --- */
+        function setGradientTarget(target) {
+            gradientTarget = target;
+            document.getElementById('btn-target-bg').classList.toggle('active', target === 'background');
+            document.getElementById('btn-target-fg').classList.toggle('active', target === 'foreground');
+            
+            if (currentTheme.type === 'gradient') {
+                updateTheme(currentTheme, document.querySelector('.color-node.selected'));
+            }
+        }
+
+        /* --- Calculus & Color Utilities --- */
         function hexToRgb(hex) {
             hex = hex.replace('#', '');
             if (hex.length === 3) hex = hex.split('').map(x => x + x).join('');
@@ -346,11 +398,12 @@
             };
         }
 
-        function calculateContrastMode(r, g, b) {
-            const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-            return luminance > 0.5 ? 'dark' : 'light';
+        function getLuminance(hex) {
+            const rgb = hexToRgb(hex);
+            return (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
         }
 
+        /* --- Geometry Sync --- */
         function syncCanvasDimensions() {
             const dpr = window.devicePixelRatio || 1;
             canvas.width = window.innerWidth * dpr;
@@ -362,8 +415,11 @@
             initMatrix();
             initWireframe();
             
-            ctx.fillStyle = `rgb(${currentRgb.r}, ${currentRgb.g}, ${currentRgb.b})`;
-            ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+            if (currentTheme.type === 'gradient') {
+                canvasGradient = ctx.createLinearGradient(0, 0, window.innerWidth, window.innerHeight);
+                canvasGradient.addColorStop(0, currentTheme.colors[0]);
+                canvasGradient.addColorStop(1, currentTheme.colors[1]);
+            }
         }
         window.addEventListener('resize', syncCanvasDimensions);
 
@@ -400,8 +456,7 @@
         function renderWireframeFrame() {
             ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
             
-            const isDarkMesh = contrastMode === 'dark';
-            const nodeColor = isDarkMesh ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.6)';
+            const nodeColor = isForegroundGradient ? canvasGradient : fgColorString;
 
             entities.forEach(entity => {
                 entity.computePhysics();
@@ -420,9 +475,8 @@
                         const opacity = 1 - (distance / connectionDistance);
                         
                         ctx.beginPath();
-                        ctx.strokeStyle = isDarkMesh 
-                            ? `rgba(0,0,0,${opacity * 0.5})` 
-                            : `rgba(255,255,255,${opacity * 0.5})`;
+                        ctx.globalAlpha = opacity * 0.5;
+                        ctx.strokeStyle = nodeColor;
                         ctx.lineWidth = 0.8;
                         ctx.moveTo(entities[i].x, entities[i].y);
                         ctx.lineTo(entities[j].x, entities[j].y);
@@ -430,36 +484,56 @@
                     }
                 }
             }
+            ctx.globalAlpha = 1.0;
         }
 
-        /* --- Matrix Engine --- */
+        /* --- Temporal Decay Matrix Engine --- */
         const charset = 'アァカサタナハマヤャラワガザダバパイィキシチニヒミリヰギジヂビピウゥクスツヌフムユュルグズブヅプエェケセテネヘメレゲゼデベペオォコソトノホモヨョロゴゾドボポヴッン0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
         const fontSize = 16;
-        let drops = [];
+        const trailLength = 22;
+        let columnsArray = [];
+
+        class MatrixColumn {
+            constructor(x) {
+                this.x = x;
+                this.headY = Math.random() * -100;
+                this.chars = Array(trailLength).fill('').map(() => charset[Math.floor(Math.random() * charset.length)]);
+            }
+            update() {
+                this.headY += 0.8 * speedMultiplier;
+                if (this.headY * fontSize > window.innerHeight && Math.random() > 0.975) {
+                    this.headY = 0;
+                    for(let i=0; i<trailLength; i++) this.chars[i] = charset[Math.floor(Math.random() * charset.length)];
+                }
+            }
+            render(context) {
+                context.fillStyle = isForegroundGradient ? canvasGradient : fgColorString;
+                for(let i = 0; i < trailLength; i++) {
+                    let yPos = this.headY - i;
+                    if (yPos < 0 || yPos * fontSize > window.innerHeight + fontSize) continue;
+                    
+                    context.globalAlpha = 1 - (i / trailLength);
+                    if (Math.random() > 0.98) this.chars[i] = charset[Math.floor(Math.random() * charset.length)];
+                    context.fillText(this.chars[i], this.x * fontSize, yPos * fontSize);
+                }
+            }
+        }
 
         function initMatrix() {
             const columns = Math.floor(window.innerWidth / fontSize) + 1;
-            drops = [];
-            for (let x = 0; x < columns; x++) drops[x] = (Math.random() * -100);
+            columnsArray = [];
+            for (let x = 0; x < columns; x++) columnsArray.push(new MatrixColumn(x));
         }
 
         function renderMatrixFrame() {
-            ctx.fillStyle = `rgba(${currentRgb.r}, ${currentRgb.g}, ${currentRgb.b}, 0.08)`;
-            ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
-
-            ctx.fillStyle = contrastMode === 'dark' ? '#000000' : '#ffffff';
+            ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
             ctx.font = `${fontSize}px monospace`;
 
-            for (let i = 0; i < drops.length; i++) {
-                if (drops[i] * fontSize >= 0) {
-                    const text = charset[Math.floor(Math.random() * charset.length)];
-                    ctx.fillText(text, i * fontSize, drops[i] * fontSize);
-                }
-                
-                if (drops[i] * fontSize > window.innerHeight && Math.random() > 0.975) drops[i] = 0;
-                
-                drops[i] += (0.8 * speedMultiplier); 
+            for (let i = 0; i < columnsArray.length; i++) {
+                columnsArray[i].update();
+                columnsArray[i].render(ctx);
             }
+            ctx.globalAlpha = 1.0;
         }
 
         /* --- Multiplexed Rendering Loop --- */
@@ -472,24 +546,46 @@
             requestAnimationFrame(renderLoop);
         }
 
-        /* --- Theme Management --- */
-        window.updateTheme = function(hexColor, pickerNode) {
-            currentRgb = hexToRgb(hexColor);
-            contrastMode = calculateContrastMode(currentRgb.r, currentRgb.g, currentRgb.b);
+        /* --- Theme Management Architecture --- */
+        window.updateTheme = function(theme, pickerNode) {
+            currentTheme = theme;
             
-            document.body.style.backgroundColor = hexColor;
+            document.querySelectorAll('.color-node').forEach(n => n.classList.remove('selected'));
+            if (pickerNode) pickerNode.classList.add('selected');
             
-            const metaTheme = document.querySelector('meta[name="theme-color"]');
-            if(metaTheme) metaTheme.setAttribute('content', hexColor);
+            let bgStyle = '';
+            
+            if (theme.type === 'solid') {
+                isForegroundGradient = false;
+                bgStyle = theme.colors[0];
+                fgColorString = getLuminance(theme.colors[0]) > 0.5 ? '#000000' : '#ffffff';
+            } else if (theme.type === 'gradient') {
+                canvasGradient = ctx.createLinearGradient(0, 0, window.innerWidth, window.innerHeight);
+                canvasGradient.addColorStop(0, theme.colors[0]);
+                canvasGradient.addColorStop(1, theme.colors[1]);
 
-            const isDarkText = contrastMode === 'dark';
-            const uiColor = isDarkText ? '#000000' : '#ffffff';
-            const uiBorder = isDarkText ? 'rgba(0, 0, 0, 0.4)' : 'rgba(255, 255, 255, 0.4)';
+                if (gradientTarget === 'background') {
+                    isForegroundGradient = false;
+                    bgStyle = `linear-gradient(135deg, ${theme.colors[0]}, ${theme.colors[1]})`;
+                    const avgLuminance = (getLuminance(theme.colors[0]) + getLuminance(theme.colors[1])) / 2;
+                    fgColorString = avgLuminance > 0.5 ? '#000000' : '#ffffff';
+                } else {
+                    isForegroundGradient = true;
+                    bgStyle = '#0a0a0a'; 
+                    fgColorString = '#ffffff'; 
+                }
+            }
             
-            document.getElementById('lock-status').style.color = uiColor;
-            document.getElementById('speed-label').style.color = uiColor;
-            document.getElementById('speed-slider').style.color = uiColor; 
-
+            // Delegate background drawing to DOM to maintain canvas transparency
+            document.body.style.background = bgStyle;
+            
+            // Apply calculated perceptual contrast to UI
+            const uiColor = isForegroundGradient ? '#ffffff' : fgColorString;
+            const uiBorder = uiColor === '#000000' ? 'rgba(0, 0, 0, 0.4)' : 'rgba(255, 255, 255, 0.4)';
+            
+            document.getElementById('ui-layer').style.color = uiColor;
+            document.getElementById('speed-slider').style.color = uiColor;
+            
             document.querySelectorAll('.action-btn, #panel-toggle').forEach(btn => {
                 btn.style.color = uiColor;
                 btn.style.borderColor = uiBorder;
@@ -497,28 +593,18 @@
             
             document.querySelectorAll('.color-node').forEach(node => {
                 node.style.borderColor = uiBorder;
-                node.style.boxShadow = 'none';
             });
             
-            if (pickerNode) {
-                pickerNode.style.borderColor = uiColor;
-                pickerNode.style.boxShadow = `0 0 10px ${isDarkText ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)'}`;
-            }
-
-            ctx.fillStyle = hexColor;
-            ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+            if (pickerNode) pickerNode.style.borderColor = uiColor;
         };
 
         /* --- Bootstrap Sequence --- */
         window.addEventListener('load', () => {
             initWireframe();
             syncCanvasDimensions();
-            updateTheme('#000000', document.getElementById('node-black'));
+            updateTheme({type: 'solid', colors: ['#000000']}, document.getElementById('node-black'));
             
-            // Aggressive automated lock acquisition
             acquireWakeLock();
-            
-            // Initialize rendering pipeline
             requestAnimationFrame(renderLoop);
         });
 
