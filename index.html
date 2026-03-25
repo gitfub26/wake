@@ -23,21 +23,28 @@
 }
 
 * { margin:0; padding:0; box-sizing:border-box; }
-html, body { width:100%; height:100%; overflow:hidden; touch-action:none; -webkit-user-select:none; user-select:none; background:#000; }
+html, body {
+  width:100%; height:100%;
+  overflow:hidden;
+  touch-action:none;
+  -webkit-user-select:none; user-select:none;
+  background:#000;
+}
 
 #canvas { position:fixed; top:0; left:0; width:100%; height:100%; display:block; }
 
 #scanlines {
   position:fixed; top:0; left:0; width:100%; height:100%;
-  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.05) 2px,rgba(0,0,0,0.05) 4px);
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.045) 2px,rgba(0,0,0,0.045) 4px);
   pointer-events:none; z-index:4;
 }
 #vignette {
   position:fixed; top:0; left:0; width:100%; height:100%;
-  background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,0.75) 100%);
+  background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,0.72) 100%);
   pointer-events:none; z-index:4;
 }
 
+/* ── TOP BAR ── */
 #hud {
   position:fixed; top:0; left:0; right:0; z-index:10;
   padding:env(safe-area-inset-top,14px) 20px 0;
@@ -66,22 +73,30 @@ html, body { width:100%; height:100%; overflow:hidden; touch-action:none; -webki
   96%{clip-path:inset(55% 0 15% 0);transform:translateX(3px)}
 }
 .sdot {
-  width:7px;height:7px;border-radius:50%;
-  background:var(--primary);box-shadow:0 0 7px var(--primary);
+  width:7px; height:7px; border-radius:50%;
+  background:var(--primary); box-shadow:0 0 7px var(--primary);
   animation:pdot 2s ease-in-out infinite;
 }
 @keyframes pdot {
-  0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.65)}
+  0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.35;transform:scale(.65)}
 }
 
+/* ── CLOCK PANEL ── */
 #clock-panel {
   position:fixed; top:50%; left:50%;
   transform:translate(-50%,-50%);
-  z-index:10; text-align:center; pointer-events:none;
+  z-index:10; text-align:center;
+  pointer-events:auto;
+  transition:opacity 0.5s ease, transform 0.5s ease;
+}
+#clock-panel.hidden {
+  opacity:0;
+  transform:translate(-50%,-50%) scale(0.88);
+  pointer-events:none;
 }
 #clock {
   font-family:var(--font-display);
-  font-size:clamp(42px,14vw,88px);
+  font-size:clamp(42px,14vw,92px);
   font-weight:900; color:var(--primary);
   text-shadow:0 0 24px var(--primary),0 0 50px var(--primary);
   letter-spacing:3px; line-height:1;
@@ -89,7 +104,7 @@ html, body { width:100%; height:100%; overflow:hidden; touch-action:none; -webki
 }
 #clock-ampm {
   font-family:var(--font-display);
-  font-size:clamp(16px,4vw,28px); font-weight:700;
+  font-size:clamp(16px,4.5vw,30px); font-weight:700;
   color:var(--secondary); letter-spacing:4px; margin-top:4px;
   text-shadow:0 0 12px var(--primary); transition:color 0.6s;
 }
@@ -105,82 +120,128 @@ html, body { width:100%; height:100%; overflow:hidden; touch-action:none; -webki
   margin-top:14px; opacity:0.75;
 }
 
+/* Hide clock tap hint */
+#clock-hint {
+  position:fixed; top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  z-index:10; text-align:center;
+  pointer-events:none; opacity:0;
+  transition:opacity 0.5s ease;
+  font-family:var(--font-mono); font-size:11px;
+  color:var(--secondary); letter-spacing:3px;
+}
+#clock-panel.hidden ~ #clock-hint { opacity:0.5; }
+
+/* ── BOTTOM CONTROLS ── */
 #controls {
   position:fixed; bottom:0; left:0; right:0; z-index:10;
-  padding:0 16px calc(env(safe-area-inset-bottom,16px) + 16px);
-  display:flex; flex-direction:column; align-items:center; gap:11px;
+  padding:0 16px calc(env(safe-area-inset-bottom,16px) + 14px);
+  display:flex; flex-direction:column; align-items:center; gap:10px;
 }
-#mode-selector { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; }
+
+/* Mode pills — 2 rows of 2, wider on iPhone */
+#mode-selector {
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:6px;
+  width:100%; max-width:360px;
+}
 .mode-pill {
-  font-family:var(--font-mono); font-size:10px; letter-spacing:2px;
+  font-family:var(--font-mono); font-size:9.5px; letter-spacing:1.5px;
   color:var(--secondary); background:var(--panel); border:1px solid var(--border);
-  border-radius:20px; padding:7px 13px; cursor:pointer;
+  border-radius:20px; padding:8px 4px; cursor:pointer;
   -webkit-tap-highlight-color:transparent;
   backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
   transition:all 0.3s; -webkit-appearance:none; appearance:none;
-  text-transform:uppercase;
+  text-transform:uppercase; text-align:center;
 }
 .mode-pill.active {
   background:var(--primary); color:#000;
   border-color:var(--primary); box-shadow:0 0 14px var(--primary); font-weight:700;
 }
-.mode-pill:active { transform:scale(0.94); }
+.mode-pill:active { transform:scale(0.93); }
 
-#btn-row { display:flex; gap:10px; align-items:center; }
+#btn-row { display:flex; gap:9px; align-items:center; }
 .ctrl-btn {
   font-family:var(--font-mono); font-size:11px; letter-spacing:2px;
   color:var(--primary); background:var(--panel); border:1px solid var(--border);
-  border-radius:20px; padding:10px 16px; cursor:pointer;
+  border-radius:20px; padding:10px 14px; cursor:pointer;
   -webkit-tap-highlight-color:transparent;
   backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
   transition:all 0.3s; box-shadow:0 0 10px var(--glow);
   text-transform:uppercase; white-space:nowrap;
   -webkit-appearance:none; appearance:none;
 }
-.ctrl-btn:active { transform:scale(0.94); box-shadow:0 0 22px var(--primary); }
+.ctrl-btn:active { transform:scale(0.93); box-shadow:0 0 22px var(--primary); }
 .ctrl-btn.icon-btn {
-  width:44px;height:44px;padding:0;
-  display:flex;align-items:center;justify-content:center;
-  border-radius:50%;font-size:18px;
+  width:44px; height:44px; padding:0;
+  display:flex; align-items:center; justify-content:center;
+  border-radius:50%; font-size:17px;
 }
 .ctrl-btn.primary-btn {
-  padding:11px 24px;font-size:11px;
-  font-family:var(--font-display);font-weight:700;letter-spacing:3px;
+  padding:11px 20px; font-size:11px;
+  font-family:var(--font-display); font-weight:700; letter-spacing:2.5px;
 }
-.ctrl-btn.active { background:var(--primary);color:#000;box-shadow:0 0 18px var(--primary); }
+.ctrl-btn.active { background:var(--primary); color:#000; box-shadow:0 0 18px var(--primary); }
 
-#slider-row { display:flex;align-items:center;gap:10px;width:100%;max-width:320px; }
-#slider-row label { font-family:var(--font-mono);font-size:10px;color:var(--secondary);letter-spacing:2px;white-space:nowrap; }
+/* Clock toggle button */
+#clock-toggle-btn { font-size:15px; }
+
+/* Color swatch strip */
+#color-strip {
+  display:flex; gap:7px; align-items:center; justify-content:center;
+  width:100%; max-width:360px;
+}
+.cswatch {
+  width:28px; height:28px; border-radius:50%;
+  border:2px solid transparent;
+  cursor:pointer; transition:all 0.3s;
+  -webkit-tap-highlight-color:transparent;
+  flex-shrink:0;
+  box-shadow:0 0 0 0 transparent;
+}
+.cswatch.active {
+  border-color:#fff;
+  transform:scale(1.25);
+  box-shadow:0 0 10px currentColor;
+}
+.cswatch:active { transform:scale(1.05); }
+
+/* Slider */
+#slider-row { display:flex; align-items:center; gap:10px; width:100%; max-width:340px; }
+#slider-row label { font-family:var(--font-mono); font-size:10px; color:var(--secondary); letter-spacing:2px; white-space:nowrap; }
 input[type=range] {
-  -webkit-appearance:none;appearance:none;flex:1;height:3px;
-  background:var(--dim);border-radius:2px;outline:none;cursor:pointer;
+  -webkit-appearance:none; appearance:none; flex:1; height:3px;
+  background:var(--dim); border-radius:2px; outline:none; cursor:pointer;
 }
 input[type=range]::-webkit-slider-thumb {
-  -webkit-appearance:none;appearance:none;width:18px;height:18px;
-  border-radius:50%;background:var(--primary);box-shadow:0 0 8px var(--primary);cursor:pointer;
+  -webkit-appearance:none; appearance:none; width:18px; height:18px;
+  border-radius:50%; background:var(--primary); box-shadow:0 0 8px var(--primary); cursor:pointer;
 }
 
+/* Wake indicator */
 #wake-indicator {
-  display:flex;align-items:center;gap:6px;
-  font-family:var(--font-mono);font-size:10px;
-  color:var(--secondary);letter-spacing:2px;opacity:.7;
+  display:flex; align-items:center; gap:6px;
+  font-family:var(--font-mono); font-size:10px;
+  color:var(--secondary); letter-spacing:2px; opacity:.7;
 }
-.wdot{width:6px;height:6px;border-radius:50%;background:var(--secondary);}
-.wdot.active{background:var(--primary);box-shadow:0 0 7px var(--primary);animation:pdot 1.5s ease-in-out infinite;}
+.wdot { width:6px; height:6px; border-radius:50%; background:var(--secondary); }
+.wdot.active { background:var(--primary); box-shadow:0 0 7px var(--primary); animation:pdot 1.5s ease-in-out infinite; }
 
+/* Toast */
 #toast {
-  position:fixed;top:50%;left:50%;
+  position:fixed; top:50%; left:50%;
   transform:translate(-50%,-50%) scale(0.85);
-  background:var(--panel);border:1px solid var(--border);
-  color:var(--primary);font-family:var(--font-mono);
-  font-size:12px;letter-spacing:2px;padding:12px 22px;border-radius:8px;
-  z-index:100;opacity:0;transition:all 0.3s ease;
-  backdrop-filter:blur(12px);pointer-events:none;
-  text-align:center;text-transform:uppercase;white-space:nowrap;
+  background:var(--panel); border:1px solid var(--border);
+  color:var(--primary); font-family:var(--font-mono);
+  font-size:12px; letter-spacing:2px; padding:12px 22px; border-radius:8px;
+  z-index:100; opacity:0; transition:all 0.3s ease;
+  backdrop-filter:blur(12px); pointer-events:none;
+  text-align:center; text-transform:uppercase; white-space:nowrap;
 }
-#toast.show{opacity:1;transform:translate(-50%,-50%) scale(1);}
+#toast.show { opacity:1; transform:translate(-50%,-50%) scale(1); }
 
-#nosleep-video{position:fixed;top:-1px;left:-1px;width:1px;height:1px;opacity:.01;pointer-events:none;z-index:-1;}
+#nosleep-video { position:fixed; top:-1px; left:-1px; width:1px; height:1px; opacity:.01; pointer-events:none; z-index:-1; }
 </style>
 </head>
 <body>
@@ -207,24 +268,30 @@ input[type=range]::-webkit-slider-thumb {
   <div id="date-display">Loading...</div>
   <div id="wake-status">INITIALIZING...</div>
 </div>
+<div id="clock-hint">TAP TO SHOW CLOCK</div>
 
 <div id="controls">
   <div id="mode-selector">
     <button class="mode-pill active" data-mode="matrix">MATRIX</button>
     <button class="mode-pill" data-mode="particles">NETWORK</button>
-    <button class="mode-pill" data-mode="wireframe">WIREFRAME</button>
+    <button class="mode-pill" data-mode="wireframe">WIRE</button>
     <button class="mode-pill" data-mode="waves">WAVES</button>
   </div>
+
+  <div id="color-strip"></div>
+
   <div id="slider-row">
     <label>SLOW</label>
     <input type="range" id="speed-slider" min="1" max="10" value="5">
     <label>FAST</label>
   </div>
+
   <div id="btn-row">
-    <button class="ctrl-btn icon-btn" id="daynight-btn">☀️</button>
-    <button class="ctrl-btn primary-btn active" id="wake-btn">■ KEEP AWAKE</button>
-    <button class="ctrl-btn icon-btn" id="color-btn">🟢</button>
+    <button class="ctrl-btn icon-btn" id="daynight-btn" title="Day/Night">☀️</button>
+    <button class="ctrl-btn icon-btn" id="clock-toggle-btn" title="Toggle Clock">🕐</button>
+    <button class="ctrl-btn primary-btn active" id="wake-btn">■ AWAKE</button>
   </div>
+
   <div id="wake-indicator">
     <div class="wdot active" id="wake-dot"></div>
     <span id="wake-label">SCREEN LOCK DISABLED</span>
@@ -234,7 +301,7 @@ input[type=range]::-webkit-slider-thumb {
 <div id="toast"></div>
 
 <script>
-// ── PWA ─────────────────────────────────────────────────────────
+// ── PWA ──────────────────────────────────────────────────────────
 const mfst={name:'AWAKE',short_name:'AWAKE',start_url:'.',display:'fullscreen',orientation:'any',background_color:'#000010',theme_color:'#00ff41',icons:[{src:"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23000'/%3E%3Ctext y='.9em' font-size='90'%3E🟩%3C/text%3E%3C/svg%3E",sizes:'512x512',type:'image/svg+xml',purpose:'any maskable'}]};
 const mblob=new Blob([JSON.stringify(mfst)],{type:'application/json'});
 const mlink=document.createElement('link');mlink.rel='manifest';mlink.href=URL.createObjectURL(mblob);document.head.appendChild(mlink);
@@ -243,26 +310,32 @@ if('serviceWorker' in navigator){
   navigator.serviceWorker.register(URL.createObjectURL(new Blob([sw],{type:'application/javascript'}))).catch(()=>{});
 }
 
+// ── Palettes ─────────────────────────────────────────────────────
+const PALETTES = [
+  {name:'Green',   hex:'#00ff41', p:'#00ff41', s:'#008f11', d:'#003b00', r:0,   g:255, b:65},
+  {name:'Cyan',    hex:'#00d4ff', p:'#00d4ff', s:'#006688', d:'#001833', r:0,   g:212, b:255},
+  {name:'Purple',  hex:'#bf5fff', p:'#bf5fff', s:'#7700cc', d:'#1a0033', r:191, g:95,  b:255},
+  {name:'Amber',   hex:'#ffb700', p:'#ffb700', s:'#996d00', d:'#332200', r:255, g:183, b:0},
+  {name:'Red',     hex:'#ff2244', p:'#ff2244', s:'#991122', d:'#330008', r:255, g:34,  b:68},
+  {name:'Pink',    hex:'#ff55cc', p:'#ff55cc', s:'#bb2299', d:'#330022', r:255, g:85,  b:204},
+  {name:'Teal',    hex:'#00ffcc', p:'#00ffcc', s:'#007755', d:'#002211', r:0,   g:255, b:204},
+  {name:'White',   hex:'#e8e8ff', p:'#e8e8ff', s:'#9999cc', d:'#222233', r:232, g:232, b:255},
+];
+
 // ── State ────────────────────────────────────────────────────────
-let vizMode='matrix', isDayMode=false;
+let vizMode='matrix', isDayMode=false, clockVisible=true;
 let wakeLockActive=false, wakeLockSentinel=null;
 let speed=5, animFrame, colorMode=0;
 
-const PALETTES=[
-  {name:'🟢',p:'#00ff41',s:'#008f11',d:'#003b00',r:0,  g:255,b:65},
-  {name:'🔵',p:'#00d4ff',s:'#006688',d:'#001833',r:0,  g:212,b:255},
-  {name:'🟣',p:'#bf5fff',s:'#7700cc',d:'#1a0033',r:191,g:95, b:255},
-  {name:'🟡',p:'#ffb700',s:'#996d00',d:'#332200',r:255,g:183,b:0},
-];
-
 const canvas=document.getElementById('canvas');
 const ctx=canvas.getContext('2d');
-let W,H;
+let W, H;
 
-function pal(){return PALETTES[colorMode];}
+// ── Color helpers ────────────────────────────────────────────────
+function pal(){ return PALETTES[colorMode]; }
 function rgba(a){
   const c=pal();
-  if(isDayMode)return`rgba(20,80,40,${a})`;
+  if(isDayMode) return`rgba(20,80,40,${a})`;
   return`rgba(${c.r},${c.g},${c.b},${a})`;
 }
 function applyCSS(){
@@ -274,10 +347,34 @@ function applyCSS(){
   const panel=isDayMode?'rgba(220,245,225,0.88)':'rgba(0,15,0,0.82)';
   const border=isDayMode?'rgba(26,107,46,0.25)':`rgba(${c.r},${c.g},${c.b},0.28)`;
   const root=document.documentElement.style;
-  root.setProperty('--primary',p);root.setProperty('--secondary',s);
-  root.setProperty('--dim',d);root.setProperty('--glow',g);
-  root.setProperty('--panel',panel);root.setProperty('--border',border);
+  root.setProperty('--primary',p); root.setProperty('--secondary',s);
+  root.setProperty('--dim',d);     root.setProperty('--glow',g);
+  root.setProperty('--panel',panel); root.setProperty('--border',border);
   document.body.style.background=isDayMode?'#dff0e4':'#000000';
+  // Update swatch active state
+  document.querySelectorAll('.cswatch').forEach((sw,i)=>{
+    sw.classList.toggle('active', i===colorMode);
+    sw.style.boxShadow=i===colorMode?`0 0 10px ${PALETTES[i].hex}`:'none';
+  });
+}
+
+function buildSwatches(){
+  const strip=document.getElementById('color-strip');
+  strip.innerHTML='';
+  PALETTES.forEach((p,i)=>{
+    const s=document.createElement('button');
+    s.className='cswatch'+(i===0?' active':'');
+    s.style.background=p.hex;
+    s.style.color=p.hex;
+    s.title=p.name;
+    s.addEventListener('click',()=>{
+      colorMode=i;
+      applyCSS();
+      ctx.clearRect(0,0,W,H);
+      showToast(p.name.toUpperCase());
+    });
+    strip.appendChild(s);
+  });
 }
 
 function resize(){
@@ -286,206 +383,309 @@ function resize(){
   initCurrentMode();
 }
 
-// ══ MATRIX ══════════════════════════════════════════════════════
+// ══ MATRIX ═══════════════════════════════════════════════════════
 const CHARS='ｦｧｨｩｪｫｬｭｮｯｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ@#$%&<>{}|~';
-let mDrops=[],mFS=16,mTick=0;
+const TRAIL_LEN = 28;  // number of visible cells in each column's tail
+let mCols=[], mFS=16, mTick=0;
 
+// Each column: { head (float row), trail (array of {ch,age}), active }
 function initMatrix(){
   mFS=Math.max(12,Math.min(18,W/40));
   const n=Math.floor(W/mFS);
-  mDrops=Array(n).fill(0).map(()=>Math.random()*-120);
-}
-
-function drawMatrix(){
-  ctx.fillStyle=isDayMode?'rgba(215,240,220,0.10)':'rgba(0,0,0,0.06)';
-  ctx.fillRect(0,0,W,H);
-  const sf=speed/5;
-  const skip=Math.max(1,Math.round(3/sf));
-  mTick++;
-  if(mTick%skip===0){
-    ctx.font=`${mFS}px 'Share Tech Mono',monospace`;
-    for(let i=0;i<mDrops.length;i++){
-      const ch=CHARS[Math.floor(Math.random()*CHARS.length)];
-      const x=i*mFS,y=mDrops[i]*mFS;
-      const isHead=Math.random()>0.85;
-      ctx.fillStyle=isHead?(isDayMode?'rgba(255,255,255,0.97)':rgba(1)):rgba(0.82);
-      ctx.shadowColor=isHead?pal().p:'transparent';
-      ctx.shadowBlur=isHead?10:0;
-      ctx.fillText(ch,x,y);
-      ctx.shadowBlur=0;
-      if(y>H&&Math.random()>0.975)mDrops[i]=0;
-      mDrops[i]+=sf*0.5;
-    }
-  }
-}
-
-// ══ NETWORK (inspired by image 1) ═══════════════════════════════
-let particles=[];
-const MAX_P=110,CONN=130;
-
-function initParticles(){
-  particles=Array.from({length:MAX_P},()=>({
-    x:Math.random()*W,y:Math.random()*H,
-    vx:(Math.random()-.5)*.5,vy:(Math.random()-.5)*.5,
-    r:Math.random()*2.5+1,
-    bokeh:Math.random()>.68,bokehR:Math.random()*14+5,
-    bokehA:Math.random()*.22+.04,pulse:Math.random()*Math.PI*2,
+  mCols=Array.from({length:n},(_,i)=>({
+    head: Math.random()*-40,          // start staggered above screen
+    trail: [],
+    speed: 0.3+Math.random()*0.55,    // per-column speed variation
+    active: true,
   }));
 }
 
+function rndCh(){ return CHARS[Math.floor(Math.random()*CHARS.length)]; }
+
+function drawMatrix(){
+  // Dark background wipe — keep very transparent so old chars linger longer
+  ctx.fillStyle=isDayMode?'rgba(215,240,220,0.55)':'rgba(0,0,0,0.55)';
+  ctx.fillRect(0,0,W,H);
+
+  const sf=speed/5;
+  const skip=Math.max(1,Math.round(3/sf));
+  mTick++;
+  const doStep=(mTick%skip===0);
+
+  ctx.font=`${mFS}px 'Share Tech Mono',monospace`;
+  const c=pal();
+
+  for(let i=0;i<mCols.length;i++){
+    const col=mCols[i];
+    const x=i*mFS;
+
+    if(doStep){
+      // Advance head
+      col.head+=col.speed*sf;
+
+      // Push new character at head position into trail
+      const headRow=Math.floor(col.head);
+      if(col.trail.length===0 || col.trail[col.trail.length-1].row !== headRow){
+        col.trail.push({ ch:rndCh(), row:headRow });
+        // Randomly mutate existing trail characters (flickering effect)
+        if(col.trail.length>2 && Math.random()<0.18){
+          const ri=Math.floor(Math.random()*(col.trail.length-1));
+          col.trail[ri].ch=rndCh();
+        }
+      }
+
+      // Trim trail to max length
+      if(col.trail.length>TRAIL_LEN) col.trail.shift();
+
+      // Reset column when it scrolls fully off screen
+      if(col.head*mFS>H+mFS*TRAIL_LEN){
+        col.head=Math.random()*-30;
+        col.trail=[];
+        col.speed=0.3+Math.random()*0.55;
+      }
+    }
+
+    // Draw each cell in the trail with brightness based on position
+    const tLen=col.trail.length;
+    for(let t=0;t<tLen;t++){
+      const cell=col.trail[t];
+      const y=cell.row*mFS;
+      if(y<-mFS||y>H+mFS) continue;
+
+      const pos=t/tLen; // 0=oldest(tail) → 1=newest(head)
+      const isHead=(t===tLen-1);
+
+      let alpha, r2, g2, b2;
+      if(isDayMode){
+        // Day: head=white, trail=dark green fading
+        if(isHead){ r2=255;g2=255;b2=255;alpha=0.98; }
+        else { r2=20;g2=80;b2=40; alpha=0.15+pos*0.65; }
+      } else {
+        if(isHead){
+          // Bright white-green head
+          r2=200+(c.r-200>0?c.r-200:0); g2=255; b2=c.b>100?c.b:80;
+          alpha=1.0;
+        } else {
+          // Trail: interpolate from dim to bright as pos→1
+          // Oldest cells very dim, newest near-head fairly bright
+          const brightness=0.08+Math.pow(pos,1.6)*0.82;
+          r2=c.r; g2=c.g; b2=c.b;
+          alpha=brightness;
+        }
+      }
+
+      if(isHead){
+        ctx.shadowColor=isDayMode?'#ffffff':c.p;
+        ctx.shadowBlur=14;
+      } else {
+        ctx.shadowBlur=0;
+      }
+
+      ctx.fillStyle=`rgba(${r2},${g2},${b2},${alpha})`;
+      ctx.fillText(cell.ch, x, y);
+    }
+    ctx.shadowBlur=0;
+  }
+}
+
+// ══ NETWORK ══════════════════════════════════════════════════════
+let particles=[];
+const MAX_P=110, CONN=130;
+function initParticles(){
+  particles=Array.from({length:MAX_P},()=>({
+    x:Math.random()*W, y:Math.random()*H,
+    vx:(Math.random()-.5)*.5, vy:(Math.random()-.5)*.5,
+    r:Math.random()*2.5+1,
+    bokeh:Math.random()>.68, bokehR:Math.random()*14+5,
+    bokehA:Math.random()*.22+.04, pulse:Math.random()*Math.PI*2,
+  }));
+}
 function drawParticles(){
   ctx.fillStyle=isDayMode?'rgba(215,240,220,0.18)':'rgba(0,0,10,0.22)';
   ctx.fillRect(0,0,W,H);
-  const sf=speed/5*.4;
-  const c=pal();
-
-  // Horizon wave glow (like the misty wave in image 1)
+  const sf=speed/5*.4, c=pal();
+  // Horizon glow wave
   const wg=ctx.createLinearGradient(0,H*.55,0,H);
   wg.addColorStop(0,`rgba(${c.r},${c.g},${c.b},${isDayMode?.07:.05})`);
   wg.addColorStop(1,'transparent');
   ctx.fillStyle=wg;
-  ctx.beginPath();ctx.moveTo(0,H);
+  ctx.beginPath(); ctx.moveTo(0,H);
   const t=Date.now()/4500;
   for(let x=0;x<=W;x+=4){
     const y=H*.63+Math.sin(x/130+t)*20+Math.sin(x/55+t*1.4)*9;
     ctx.lineTo(x,y);
   }
-  ctx.lineTo(W,H);ctx.closePath();ctx.fill();
-
-  // Update
+  ctx.lineTo(W,H); ctx.closePath(); ctx.fill();
   particles.forEach(p=>{
     p.pulse+=.03;
-    p.x+=p.vx*sf*5;p.y+=p.vy*sf*5;
-    if(p.x<-20)p.x=W+20;if(p.x>W+20)p.x=-20;
-    if(p.y<-20)p.y=H+20;if(p.y>H+20)p.y=-20;
+    p.x+=p.vx*sf*5; p.y+=p.vy*sf*5;
+    if(p.x<-20)p.x=W+20; if(p.x>W+20)p.x=-20;
+    if(p.y<-20)p.y=H+20; if(p.y>H+20)p.y=-20;
   });
-
-  // Lines
   for(let i=0;i<particles.length;i++){
     for(let j=i+1;j<particles.length;j++){
-      const dx=particles[i].x-particles[j].x,dy=particles[i].y-particles[j].y;
+      const dx=particles[i].x-particles[j].x, dy=particles[i].y-particles[j].y;
       const d=Math.sqrt(dx*dx+dy*dy);
       if(d<CONN){
-        const a=(1-d/CONN)*.6;
-        ctx.strokeStyle=isDayMode?`rgba(30,100,60,${a})`:`rgba(${c.r},${c.g},${c.b},${a})`;
+        ctx.strokeStyle=`rgba(${c.r},${c.g},${c.b},${(1-d/CONN)*.6})`;
         ctx.lineWidth=.9;
-        ctx.beginPath();ctx.moveTo(particles[i].x,particles[i].y);ctx.lineTo(particles[j].x,particles[j].y);ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(particles[i].x,particles[i].y); ctx.lineTo(particles[j].x,particles[j].y); ctx.stroke();
       }
     }
   }
-
-  // Bokeh + dots
   particles.forEach(p=>{
     if(p.bokeh){
       const ba=p.bokehA*(0.6+0.4*Math.sin(p.pulse));
       const rg=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.bokehR);
       rg.addColorStop(0,`rgba(${c.r},${c.g},${c.b},${ba*1.8})`);
       rg.addColorStop(1,'transparent');
-      ctx.fillStyle=rg;
-      ctx.beginPath();ctx.arc(p.x,p.y,p.bokehR,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle=rg; ctx.beginPath(); ctx.arc(p.x,p.y,p.bokehR,0,Math.PI*2); ctx.fill();
     }
-    ctx.beginPath();ctx.arc(p.x,p.y,p.r*(0.8+0.2*Math.sin(p.pulse)),0,Math.PI*2);
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r*(0.8+0.2*Math.sin(p.pulse)),0,Math.PI*2);
     ctx.fillStyle=`rgba(${c.r},${c.g},${c.b},0.92)`;
-    ctx.shadowColor=c.p;ctx.shadowBlur=7;
-    ctx.fill();ctx.shadowBlur=0;
+    ctx.shadowColor=c.p; ctx.shadowBlur=7; ctx.fill(); ctx.shadowBlur=0;
   });
 }
 
-// ══ WIREFRAME / STRING ART (inspired by image 2) ════════════════
+// ══ WIREFRAME ════════════════════════════════════════════════════
+// Full-screen: 3 spiral systems spanning entire viewport
 let wfA=0;
 function initWireframe(){}
 function drawWireframe(){
-  ctx.fillStyle=isDayMode?'rgba(215,240,220,0.10)':'rgba(0,0,0,0.06)';
+  ctx.fillStyle=isDayMode?'rgba(215,240,220,0.09)':'rgba(0,0,0,0.05)';
   ctx.fillRect(0,0,W,H);
   const sf=speed/5;
-  wfA+=.003*sf;
+  wfA+=.0025*sf;
   const c=pal();
-  const N=88;
+  const N=100;
 
-  // Swirl 1 — left anchor (like the left focal point in image 2)
-  const c1x=W*.3,c1y=H*.52;
-  const R1=Math.min(W,H)*.40;
-  const R2=Math.min(W,H)*.26;
   ctx.save();
+
+  // ─ Swirl A: large outer ring anchored near center-left, offset to right ─
+  const ax=W*.28, ay=H*.5;
+  const aR1=Math.min(W,H)*.46;  // large outer
+  const aR2=Math.min(W,H)*.22;  // inner focal
+  const aOx=W*.28, aOy=-H*.04; // offset of inner focal
   for(let i=0;i<N;i++){
     const a1=(i/N)*Math.PI*2+wfA;
-    const a2=(i/N)*Math.PI*2*.618+wfA*1.5;
-    const x1=c1x+Math.cos(a1)*R1,y1=c1y+Math.sin(a1)*R1;
-    const x2=c1x+W*.26+Math.cos(a2)*R2,y2=c1y-H*.04+Math.sin(a2)*R2;
-    const alph=isDayMode?.20:.28;
-    ctx.strokeStyle=isDayMode?`rgba(60,40,200,${alph})`:`rgba(${c.r},${c.g},${c.b},${alph})`;
-    ctx.lineWidth=.8;
-    ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+    const a2=(i/N)*Math.PI*2*.618+wfA*1.6;
+    const x1=ax+Math.cos(a1)*aR1, y1=ay+Math.sin(a1)*aR1;
+    const x2=ax+aOx+Math.cos(a2)*aR2, y2=ay+aOy+Math.sin(a2)*aR2;
+    const al=isDayMode?.18:.26;
+    ctx.strokeStyle=isDayMode?`rgba(55,35,210,${al})`:`rgba(${c.r},${c.g},${c.b},${al})`;
+    ctx.lineWidth=.85;
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
   }
 
-  // Swirl 2 — right arc fan (like the right half of image 2)
-  const c2x=W*.72,c2y=H*.46;
-  const R3=Math.min(W,H)*.32;
+  // ─ Swirl B: counter-rotating fan on the right side ─
+  const bx=W*.74, by=H*.48;
+  const bR1=Math.min(W,H)*.38;
+  const bR2=Math.min(W,H)*.16;
   for(let i=0;i<N;i++){
-    const a1=(i/N)*Math.PI*2-wfA*.9;
-    const a2=(i/N)*Math.PI*2*.382-wfA*1.2;
-    const x1=c2x+Math.cos(a1)*R3,y1=c2y+Math.sin(a1)*R3;
-    const x2=c2x+Math.cos(a2)*R3*.55,y2=c2y+Math.sin(a2)*R3*.55;
-    const alph2=isDayMode?.15:.20;
-    ctx.strokeStyle=isDayMode?`rgba(80,40,210,${alph2})`:`rgba(${c.r},${c.g},${c.b},${alph2})`;
-    ctx.lineWidth=.7;
-    ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+    const a1=(i/N)*Math.PI*2-wfA*.85;
+    const a2=(i/N)*Math.PI*2*.382-wfA*1.3;
+    const x1=bx+Math.cos(a1)*bR1, y1=by+Math.sin(a1)*bR1;
+    const x2=bx+Math.cos(a2)*bR2, y2=by+Math.sin(a2)*bR2;
+    const al2=isDayMode?.14:.20;
+    ctx.strokeStyle=isDayMode?`rgba(75,35,215,${al2})`:`rgba(${c.r},${c.g},${c.b},${al2})`;
+    ctx.lineWidth=.75;
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
   }
+
+  // ─ Swirl C: small tight rose near bottom-center ─
+  const cx2=W*.5, cy2=H*.82;
+  const cR=Math.min(W,H)*.22;
+  const M=60;
+  for(let i=0;i<M;i++){
+    const a1=(i/M)*Math.PI*2+wfA*2.1;
+    const a2=(i/M)*Math.PI*2*1.5+wfA*1.8;
+    const x1=cx2+Math.cos(a1)*cR, y1=cy2+Math.sin(a1)*cR;
+    const x2=cx2+Math.cos(a2)*cR*.45, y2=cy2+Math.sin(a2)*cR*.45;
+    const al3=isDayMode?.12:.18;
+    ctx.strokeStyle=isDayMode?`rgba(100,20,200,${al3})`:`rgba(${c.r},${c.g},${c.b},${al3})`;
+    ctx.lineWidth=.65;
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  }
+
   ctx.restore();
 }
 
-// ══ WAVES (aurora layers) ════════════════════════════════════════
+// ══ WAVES ════════════════════════════════════════════════════════
+// Full-screen: layers spread across full height
 let waveT=0;
 function initWaves(){}
 function drawWaves(){
-  ctx.fillStyle=isDayMode?'rgba(215,240,220,0.20)':'rgba(0,0,0,0.12)';
+  ctx.fillStyle=isDayMode?'rgba(215,240,220,0.16)':'rgba(0,0,0,0.10)';
   ctx.fillRect(0,0,W,H);
   const sf=speed/5;
-  waveT+=.012*sf;
+  waveT+=.011*sf;
   const c=pal();
-  const layers=6;
+  const layers=8;  // more layers to fill screen
+
   for(let l=0;l<layers;l++){
-    const freq=.006+l*.003;
-    const amp=H*.07+l*H*.025;
-    const yBase=H*(.3+l*.07);
-    const phase=waveT*(1+l*.3)+l*1.1;
-    const alpha=isDayMode?(.22-l*.025):(.35-l*.04);
+    const t=l/layers; // 0..1
+    // Spread bases across the FULL height: top 10% to bottom 85%
+    const yBase=H*(.10 + t*.75);
+    const amp=H*(.06 + t*.04);
+    const freq=.005+l*.0025;
+    const phase=waveT*(1.2-t*.5)+l*1.3;
+    const alpha=isDayMode
+      ? (.28-l*.025)
+      : (.42-l*.04);
+
     ctx.save();
-    ctx.beginPath();ctx.moveTo(0,H);
+    // Filled body to bottom
+    ctx.beginPath(); ctx.moveTo(0,H);
     for(let x=0;x<=W;x+=3){
-      const y=yBase+Math.sin(x*freq+phase)*amp+Math.sin(x*freq*2.1+phase*1.4)*amp*.4+Math.sin(x*freq*.5+phase*.7)*amp*.6;
+      const y=yBase
+        +Math.sin(x*freq+phase)*amp
+        +Math.sin(x*freq*2.2+phase*1.5)*amp*.38
+        +Math.sin(x*freq*.48+phase*.65)*amp*.55;
       ctx.lineTo(x,y);
     }
-    ctx.lineTo(W,H);ctx.closePath();
-    const grad=ctx.createLinearGradient(0,yBase-amp,0,yBase+amp);
+    ctx.lineTo(W,H); ctx.closePath();
+    const grad=ctx.createLinearGradient(0,yBase-amp,0,yBase+amp*2);
     grad.addColorStop(0,`rgba(${c.r},${c.g},${c.b},${alpha})`);
     grad.addColorStop(1,'transparent');
-    ctx.fillStyle=grad;ctx.fill();
-    ctx.strokeStyle=`rgba(${c.r},${c.g},${c.b},${alpha*1.5})`;
-    ctx.lineWidth=1;
+    ctx.fillStyle=grad; ctx.fill();
+
+    // Crest line
+    ctx.strokeStyle=`rgba(${c.r},${c.g},${c.b},${Math.min(alpha*1.6,.55)})`;
+    ctx.lineWidth=l===0?1.4:.9;
     ctx.beginPath();
     for(let x=0;x<=W;x+=3){
-      const y=yBase+Math.sin(x*freq+phase)*amp+Math.sin(x*freq*2.1+phase*1.4)*amp*.4+Math.sin(x*freq*.5+phase*.7)*amp*.6;
+      const y=yBase
+        +Math.sin(x*freq+phase)*amp
+        +Math.sin(x*freq*2.2+phase*1.5)*amp*.38
+        +Math.sin(x*freq*.48+phase*.65)*amp*.55;
       x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
     }
     ctx.stroke();
     ctx.restore();
   }
+
+  // Subtle horizontal glow line at mid-screen
+  const mg=ctx.createLinearGradient(0,0,W,0);
+  mg.addColorStop(0,'transparent');
+  mg.addColorStop(.5,`rgba(${c.r},${c.g},${c.b},${isDayMode?.06:.10})`);
+  mg.addColorStop(1,'transparent');
+  ctx.fillStyle=mg;
+  ctx.fillRect(0,H*.5-1,W,2);
 }
 
 // ── Dispatch ─────────────────────────────────────────────────────
 function initCurrentMode(){
   ctx.clearRect(0,0,W,H);
-  if(vizMode==='matrix')initMatrix();
-  else if(vizMode==='particles')initParticles();
-  else if(vizMode==='wireframe')initWireframe();
-  else if(vizMode==='waves')initWaves();
+  if(vizMode==='matrix') initMatrix();
+  else if(vizMode==='particles') initParticles();
+  else if(vizMode==='wireframe') initWireframe();
+  else if(vizMode==='waves') initWaves();
 }
 function drawFrame(){
-  if(vizMode==='matrix')drawMatrix();
-  else if(vizMode==='particles')drawParticles();
-  else if(vizMode==='wireframe')drawWireframe();
-  else if(vizMode==='waves')drawWaves();
+  if(vizMode==='matrix') drawMatrix();
+  else if(vizMode==='particles') drawParticles();
+  else if(vizMode==='wireframe') drawWireframe();
+  else if(vizMode==='waves') drawWaves();
   animFrame=requestAnimationFrame(drawFrame);
 }
 
@@ -504,7 +704,24 @@ function updateClock(){
   document.getElementById('date-display').textContent=
     `${days[now.getDay()]}  ${String(now.getDate()).padStart(2,'0')} ${months[now.getMonth()]} ${now.getFullYear()}`;
 }
-setInterval(updateClock,1000);updateClock();
+setInterval(updateClock,1000); updateClock();
+
+// ── Clock toggle ─────────────────────────────────────────────────
+function toggleClock(){
+  clockVisible=!clockVisible;
+  document.getElementById('clock-panel').classList.toggle('hidden',!clockVisible);
+  document.getElementById('clock-toggle-btn').textContent=clockVisible?'🕐':'🕐';
+  document.getElementById('clock-toggle-btn').style.opacity=clockVisible?'1':'0.5';
+  showToast(clockVisible?'CLOCK ON':'CLOCK HIDDEN');
+}
+
+// Tap centre of screen to toggle clock back on when hidden
+canvas.addEventListener('click', e=>{
+  if(!clockVisible){
+    const cx=e.clientX, cy=e.clientY;
+    if(cx>W*.25&&cx<W*.75&&cy>H*.25&&cy<H*.75) toggleClock();
+  }
+});
 
 // ── Wake Lock ────────────────────────────────────────────────────
 async function requestWakeLock(){
@@ -513,14 +730,14 @@ async function requestWakeLock(){
       wakeLockSentinel=await navigator.wakeLock.request('screen');
       wakeLockActive=true;
       wakeLockSentinel.addEventListener('release',()=>{wakeLockActive=false;updateWakeUI();});
-      updateWakeUI();return true;
-    }catch(e){wakeLockActive=false;updateWakeUI();return false;}
+      updateWakeUI(); return true;
+    }catch(e){ wakeLockActive=false; updateWakeUI(); return false; }
   }
   return false;
 }
 function releaseWakeLock(){
-  if(wakeLockSentinel){wakeLockSentinel.release();wakeLockSentinel=null;}
-  wakeLockActive=false;updateWakeUI();
+  if(wakeLockSentinel){ wakeLockSentinel.release(); wakeLockSentinel=null; }
+  wakeLockActive=false; updateWakeUI();
 }
 function updateWakeUI(){
   const dot=document.getElementById('wake-dot');
@@ -528,39 +745,38 @@ function updateWakeUI(){
   const btn=document.getElementById('wake-btn');
   const status=document.getElementById('wake-status');
   if(wakeLockActive){
-    dot.classList.add('active');label.textContent='SCREEN LOCK DISABLED';
-    btn.classList.add('active');btn.textContent='■ KEEP AWAKE';
+    dot.classList.add('active'); label.textContent='SCREEN LOCK DISABLED';
+    btn.classList.add('active'); btn.textContent='■ AWAKE';
     status.textContent='WAKE LOCK: ACTIVE';
-  }else{
-    dot.classList.remove('active');label.textContent='SCREEN LOCK ENABLED';
-    btn.classList.remove('active');btn.textContent='▶ KEEP AWAKE';
+  } else {
+    dot.classList.remove('active'); label.textContent='SCREEN LOCK ENABLED';
+    btn.classList.remove('active'); btn.textContent='▶ AWAKE';
     status.textContent='WAKE LOCK: INACTIVE';
   }
 }
 document.addEventListener('visibilitychange',()=>{
-  if(document.visibilityState==='visible'&&wakeLockActive)requestWakeLock();
+  if(document.visibilityState==='visible'&&wakeLockActive) requestWakeLock();
 });
-function iosWake(){document.getElementById('nosleep-video').play().catch(()=>{});}
+function iosWake(){ document.getElementById('nosleep-video').play().catch(()=>{}); }
 
 // ── Controls ─────────────────────────────────────────────────────
 document.getElementById('wake-btn').addEventListener('click',async()=>{
-  if(wakeLockActive){releaseWakeLock();showToast('SCREEN LOCK ENABLED');}
-  else{const ok=await requestWakeLock();iosWake();if(!ok){wakeLockActive=true;updateWakeUI();}showToast('SCREEN WILL STAY ON');}
+  if(wakeLockActive){ releaseWakeLock(); showToast('SCREEN LOCK ENABLED'); }
+  else {
+    const ok=await requestWakeLock(); iosWake();
+    if(!ok){ wakeLockActive=true; updateWakeUI(); }
+    showToast('SCREEN WILL STAY ON');
+  }
 });
 
 document.getElementById('daynight-btn').addEventListener('click',()=>{
   isDayMode=!isDayMode;
   document.getElementById('daynight-btn').textContent=isDayMode?'🌙':'☀️';
-  applyCSS();ctx.clearRect(0,0,W,H);
+  applyCSS(); ctx.clearRect(0,0,W,H);
   showToast(isDayMode?'DAY MODE':'NIGHT MODE');
 });
 
-document.getElementById('color-btn').addEventListener('click',()=>{
-  colorMode=(colorMode+1)%PALETTES.length;
-  document.getElementById('color-btn').textContent=PALETTES[colorMode].name;
-  applyCSS();ctx.clearRect(0,0,W,H);
-  showToast(['GREEN','CYAN','PURPLE','AMBER'][colorMode]);
-});
+document.getElementById('clock-toggle-btn').addEventListener('click', toggleClock);
 
 document.querySelectorAll('.mode-pill').forEach(btn=>{
   btn.addEventListener('click',()=>{
@@ -568,33 +784,39 @@ document.querySelectorAll('.mode-pill').forEach(btn=>{
     btn.classList.add('active');
     vizMode=btn.dataset.mode;
     cancelAnimationFrame(animFrame);
-    initCurrentMode();drawFrame();
+    initCurrentMode(); drawFrame();
     showToast(btn.textContent+' MODE');
   });
 });
 
-document.getElementById('speed-slider').addEventListener('input',e=>{speed=parseInt(e.target.value);});
+document.getElementById('speed-slider').addEventListener('input',e=>{ speed=parseInt(e.target.value); });
 
 // ── Toast ─────────────────────────────────────────────────────────
 let toastT;
 function showToast(msg){
   const t=document.getElementById('toast');
-  t.textContent=msg;t.classList.add('show');
-  clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),1800);
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800);
 }
 
 // ── Boot ─────────────────────────────────────────────────────────
-window.addEventListener('resize',()=>{cancelAnimationFrame(animFrame);resize();drawFrame();});
-applyCSS();resize();drawFrame();
+window.addEventListener('resize',()=>{ cancelAnimationFrame(animFrame); resize(); drawFrame(); });
+buildSwatches();
+applyCSS();
+resize();
+drawFrame();
 
 (async()=>{
-  const ok=await requestWakeLock();iosWake();
-  if(!ok){wakeLockActive=true;updateWakeUI();}
+  const ok=await requestWakeLock(); iosWake();
+  if(!ok){ wakeLockActive=true; updateWakeUI(); }
   showToast('SYSTEM ONLINE');
 })();
 
 setInterval(()=>{
-  if(document.visibilityState==='visible'){const v=document.getElementById('nosleep-video');if(v.paused)v.play().catch(()=>{});}
+  if(document.visibilityState==='visible'){
+    const v=document.getElementById('nosleep-video');
+    if(v.paused) v.play().catch(()=>{});
+  }
 },15000);
 
 document.addEventListener('touchend',e=>e.preventDefault(),{passive:false});
