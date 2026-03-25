@@ -3,18 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#000000">
-    <title>Kinetic Wake Lock</title>
+    <meta name="theme-color" content="#10141d">
+    <title>Kinetic Wake Lock PWA - Dynamic Architectures</title>
     <script>
         const manifest = {
-            "name": "Kinetic Wake Lock PWA",
+            "name": "Kinetic Engine PWA",
             "short_name": "Kinetic",
             "start_url": window.location.href,
             "display": "standalone",
             "background_color": "#000000",
             "theme_color": "#000000",
             "icons": [{
-                "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%235c5c5c'/%3E%3C/svg%3E",
+                "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%23ffffff'/%3E%3C/svg%3E",
                 "sizes": "192x192",
                 "type": "image/svg+xml"
             }]
@@ -30,68 +30,220 @@
             width: 100%;
             height: 100%;
             overflow: hidden;
-            background-color: #000000;
+            background: #000000;
             font-family: system-ui, -apple-system, sans-serif;
-            transition: background-color 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+            color: #ffffff;
+            transition: background 0.6s cubic-bezier(0.4, 0, 0.2, 1);
         }
+        
         canvas {
             display: block;
             width: 100vw;
             height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
         }
+
         #ui-layer {
             position: absolute;
             bottom: 40px;
             left: 50%;
             transform: translateX(-50%);
             display: flex;
-            gap: 20px;
+            flex-direction: column;
             background: rgba(128, 128, 128, 0.15);
-            padding: 15px 30px;
-            border-radius: 40px;
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            align-items: center;
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+            padding: 15px 25px;
+            border-radius: 30px;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
             border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 10;
+            width: fit-content;
+            min-width: 320px;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .color-node {
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            border: 2px solid rgba(255, 255, 255, 0.4);
-            cursor: pointer;
-            transition: transform 0.3s ease;
+
+        .controls-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
         }
-        .color-node:hover {
-            transform: scale(1.2);
+
+        .lock-group {
+            display: flex;
+            align-items: center;
+            gap: 15px;
         }
-        #node-black { background-color: #000000; }
-        #node-gray { background-color: #5c5c5c; }
-        #node-white { background-color: #ffffff; }
 
         #lock-status {
-            color: #ffffff;
             font-size: 13px;
-            margin-left: 10px;
             font-weight: 600;
             letter-spacing: 1.5px;
-            mix-blend-mode: difference;
+            transition: color 0.3s ease;
         }
-        button#toggle-lock {
+        
+        button.action-btn {
             background: transparent;
             border: 1px solid rgba(255, 255, 255, 0.4);
-            color: #ffffff;
-            padding: 10px 20px;
+            padding: 8px 16px;
             border-radius: 20px;
             cursor: pointer;
             font-family: inherit;
             font-weight: 500;
             transition: all 0.3s ease;
-            mix-blend-mode: difference;
+            color: inherit;
         }
-        button#toggle-lock:hover {
-            background: rgba(255, 255, 255, 0.1);
+
+        button.action-btn.active {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.8);
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+        }
+
+        button#panel-toggle {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-family: monospace;
+            font-size: 18px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            line-height: 1;
+            color: inherit;
+        }
+
+        #expanded-controls-container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            max-height: 400px; 
+            opacity: 1;
+            margin-top: 15px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
+                        opacity 0.3s ease, 
+                        margin-top 0.4s ease;
+            padding-bottom: 5px;
+        }
+
+        #expanded-controls-container.collapsed {
+            max-height: 0;
+            opacity: 0;
+            margin-top: 0;
+            padding-bottom: 0;
+        }
+
+        .control-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+        }
+
+        .slider-container {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            gap: 5px;
+            align-items: center;
+        }
+
+        .slider-container label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+            transition: color 0.3s ease;
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 90%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: currentColor;
+            cursor: pointer;
+            margin-top: -6px;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: rgba(128, 128, 128, 0.5);
+            border-radius: 2px;
+        }
+
+        .color-picker-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding-bottom: 5px;
+        }
+
+        .color-node {
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            cursor: pointer;
+            transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        .color-node:hover {
+            transform: scale(1.2);
+        }
+        .color-node.selected {
+            border-color: currentColor;
+            box-shadow: 0 0 12px currentColor;
+            transform: scale(1.1);
+        }
+
+        .solid-color-node { width: 28px; height: 28px; }
+        .gradient-color-node { width: 44px; height: 26px; border-radius: 13px; }
+
+        /* Solid mapping */
+        #node-black { background-color: #000000; }
+        #node-white { background-color: #ffffff; }
+
+        /* Gradient mapping */
+        #node-grad1 { background: linear-gradient(135deg, #ef5350, #c62828); }
+        #node-grad2 { background: linear-gradient(135deg, #ffb74d, #f06292); }
+        #node-grad3 { background: linear-gradient(135deg, #4db6ac, #00897b); }
+        #node-grad4 { background: linear-gradient(135deg, #4fc3f7, #1565c0); }
+        #node-grad5 { background: linear-gradient(135deg, #90caf9, #7e57c2); }
+        #node-grad6 { background: linear-gradient(135deg, #ba68c8, #f06292); }
+        #node-grad7 { background: linear-gradient(135deg, #aed581, #fff176); }
+        #node-grad8 { background: linear-gradient(135deg, #ffd54f, #ffb300); }
+        #node-grad9 { background: linear-gradient(135deg, #ffb74d, #e65100); }
+        #node-grad10 { background: linear-gradient(135deg, #4dd0e1, #29b6f6); }
+
+        .divider {
+            width: 100%;
+            height: 1px;
+            background: rgba(128, 128, 128, 0.3);
+            margin: 5px 0;
+        }
+
+        @media (max-width: 600px) {
+            #ui-layer { min-width: 280px; padding: 12px 20px; }
+            .gradient-color-node { width: 38px; height: 24px; }
         }
     </style>
 </head>
@@ -99,118 +251,218 @@
     <canvas id="generative-surface"></canvas>
     
     <div id="ui-layer">
-        <button id="toggle-lock">Initialize Lock</button>
-        <div class="color-node" id="node-black" onclick="updateTheme('#000000')"></div>
-        <div class="color-node" id="node-gray" onclick="updateTheme('#5c5c5c')"></div>
-        <div class="color-node" id="node-white" onclick="updateTheme('#ffffff')"></div>
-        <div id="lock-status">INACTIVE</div>
+        <div class="controls-header">
+            <div class="lock-group">
+                <button id="toggle-lock" class="action-btn">Terminate Lock</button>
+                <div id="lock-status">INITIALIZING</div>
+            </div>
+            <button id="panel-toggle" onclick="togglePalette()">+</button>
+        </div>
+
+        <div id="expanded-controls-container" class="collapsed">
+            <div class="control-row">
+                <button id="btn-wireframe" class="action-btn" onclick="setEngineMode('wireframe')">Wireframe</button>
+                <button id="btn-matrix" class="action-btn active" onclick="setEngineMode('matrix')">Matrix</button>
+            </div>
+            <div class="control-row slider-container">
+                <label id="speed-label">Velocity Constraint: <span id="speed-readout">25%</span></label>
+                <input type="range" id="speed-slider" min="1" max="100" step="1" value="25" oninput="updateSpeedMultiplier(this.value)">
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="control-row slider-container">
+                <label>Absolute Solidarity</label>
+            </div>
+            <div class="color-picker-group">
+                <div class="color-node solid-color-node selected" id="node-black" onclick="updateTheme({type: 'solid', colors: ['#000000']}, this)"></div>
+                <div class="color-node solid-color-node" id="node-white" onclick="updateTheme({type: 'solid', colors: ['#ffffff']}, this)"></div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="control-row slider-container">
+                <label>Gradient Injection Target</label>
+            </div>
+            <div class="control-row">
+                <button id="btn-target-bg" class="action-btn active" onclick="setGradientTarget('background')">Background</button>
+                <button id="btn-target-fg" class="action-btn" onclick="setGradientTarget('foreground')">Entities</button>
+            </div>
+            
+            <div class="color-picker-group" style="margin-top: 5px;">
+                <div class="color-node gradient-color-node" id="node-grad1" onclick="updateTheme({type: 'gradient', colors: ['#ef5350', '#c62828']}, this)"></div>
+                <div class="color-node gradient-color-node" id="node-grad2" onclick="updateTheme({type: 'gradient', colors: ['#ffb74d', '#f06292']}, this)"></div>
+                <div class="color-node gradient-color-node" id="node-grad3" onclick="updateTheme({type: 'gradient', colors: ['#4db6ac', '#00897b']}, this)"></div>
+                <div class="color-node gradient-color-node" id="node-grad4" onclick="updateTheme({type: 'gradient', colors: ['#4fc3f7', '#1565c0']}, this)"></div>
+                <div class="color-node gradient-color-node" id="node-grad5" onclick="updateTheme({type: 'gradient', colors: ['#90caf9', '#7e57c2']}, this)"></div>
+                <div class="color-node gradient-color-node" id="node-grad6" onclick="updateTheme({type: 'gradient', colors: ['#ba68c8', '#f06292']}, this)"></div>
+                <div class="color-node gradient-color-node" id="node-grad7" onclick="updateTheme({type: 'gradient', colors: ['#aed581', '#fff176']}, this)"></div>
+                <div class="color-node gradient-color-node" id="node-grad8" onclick="updateTheme({type: 'gradient', colors: ['#ffd54f', '#ffb300']}, this)"></div>
+                <div class="color-node gradient-color-node" id="node-grad9" onclick="updateTheme({type: 'gradient', colors: ['#ffb74d', '#e65100']}, this)"></div>
+                <div class="color-node gradient-color-node" id="node-grad10" onclick="updateTheme({type: 'gradient', colors: ['#4dd0e1', '#29b6f6']}, this)"></div>
+            </div>
+        </div>
     </div>
 
     <script>
-        /* --- Screen Wake Lock API Integration --- */
+        /* --- Core State Variables --- */
         let wakeLockRef = null;
+        let activeEngine = 'matrix';
+        let speedMultiplier = 0.75; 
+        let isPaletteOpen = false; 
+        let gradientTarget = 'background'; // 'background' or 'foreground'
+        
+        let currentTheme = {type: 'solid', colors: ['#000000']};
+        let canvasGradient = null;
+        let fgColorString = '#ffffff';
+        let isForegroundGradient = false;
+
+        const canvas = document.getElementById('generative-surface');
+        const ctx = canvas.getContext('2d', { alpha: true }); // Explicit alpha support for transparent clears
+
+        /* --- Wake Lock Management --- */
         const statusDisplay = document.getElementById('lock-status');
         const actionBtn = document.getElementById('toggle-lock');
 
         async function acquireWakeLock() {
             if (!('wakeLock' in navigator)) {
                 statusDisplay.textContent = 'UNSUPPORTED';
+                actionBtn.style.display = 'none';
                 return;
             }
             try {
                 wakeLockRef = await navigator.wakeLock.request('screen');
                 statusDisplay.textContent = 'ACTIVE';
-                actionBtn.textContent = 'Release Lock';
-                
-                // The OS can revoke the lock (e.g., low battery, tab backgrounded). 
-                // We must handle the release event.
+                actionBtn.textContent = 'Terminate Lock';
                 wakeLockRef.addEventListener('release', () => {
                     statusDisplay.textContent = 'INACTIVE';
                     actionBtn.textContent = 'Initialize Lock';
                     wakeLockRef = null;
                 });
             } catch (err) {
-                statusDisplay.textContent = 'ERROR';
-                console.error(`Wake Lock Error: ${err.name}, ${err.message}`);
+                statusDisplay.textContent = 'REJECTED';
+                actionBtn.textContent = 'Initialize Lock';
             }
         }
 
-        function handleWakeLockToggle() {
-            if (wakeLockRef !== null) {
-                wakeLockRef.release();
-            } else {
-                acquireWakeLock();
-            }
-        }
-
-        actionBtn.addEventListener('click', handleWakeLockToggle);
-
-        // Re-acquire lock automatically when the PWA is brought back to the foreground
+        actionBtn.addEventListener('click', () => wakeLockRef !== null ? wakeLockRef.release() : acquireWakeLock());
         document.addEventListener('visibilitychange', async () => {
-            if (wakeLockRef !== null && document.visibilityState === 'visible') {
-                await acquireWakeLock();
-            }
+            if (wakeLockRef !== null && document.visibilityState === 'visible') await acquireWakeLock();
         });
 
-        /* --- Generative Rendering Engine --- */
-        const canvas = document.getElementById('generative-surface');
-        const ctx = canvas.getContext('2d');
-        let entities = [];
-        let currentThemeHex = '#000000';
+        /* --- UI Management --- */
+        function togglePalette() {
+            const container = document.getElementById('expanded-controls-container');
+            const toggleBtn = document.getElementById('panel-toggle');
+            isPaletteOpen = !isPaletteOpen;
+            if (isPaletteOpen) {
+                container.classList.remove('collapsed');
+                toggleBtn.textContent = '-';
+            } else {
+                container.classList.add('collapsed');
+                toggleBtn.textContent = '+';
+            }
+        }
 
+        function updateSpeedMultiplier(percentageVal) {
+            document.getElementById('speed-readout').textContent = `${percentageVal}%`;
+            speedMultiplier = (parseInt(percentageVal) / 100) * 3.0;
+        }
+
+        function setEngineMode(mode) {
+            activeEngine = mode;
+            document.getElementById('btn-wireframe').classList.toggle('active', mode === 'wireframe');
+            document.getElementById('btn-matrix').classList.toggle('active', mode === 'matrix');
+            
+            if (mode === 'matrix') initMatrix();
+        }
+
+        function setGradientTarget(target) {
+            gradientTarget = target;
+            document.getElementById('btn-target-bg').classList.toggle('active', target === 'background');
+            document.getElementById('btn-target-fg').classList.toggle('active', target === 'foreground');
+            
+            if (currentTheme.type === 'gradient') {
+                updateTheme(currentTheme, document.querySelector('.color-node.selected'));
+            }
+        }
+
+        /* --- Calculus & Color Utilities --- */
+        function hexToRgb(hex) {
+            hex = hex.replace('#', '');
+            if (hex.length === 3) hex = hex.split('').map(x => x + x).join('');
+            return {
+                r: parseInt(hex.substring(0, 2), 16),
+                g: parseInt(hex.substring(2, 4), 16),
+                b: parseInt(hex.substring(4, 6), 16)
+            };
+        }
+
+        function getLuminance(hex) {
+            const rgb = hexToRgb(hex);
+            return (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
+        }
+
+        /* --- Geometry Sync --- */
         function syncCanvasDimensions() {
-            // Adjust for high DPI displays
             const dpr = window.devicePixelRatio || 1;
             canvas.width = window.innerWidth * dpr;
             canvas.height = window.innerHeight * dpr;
             ctx.scale(dpr, dpr);
             canvas.style.width = `${window.innerWidth}px`;
             canvas.style.height = `${window.innerHeight}px`;
+            
+            initMatrix();
+            initWireframe();
+            
+            if (currentTheme.type === 'gradient') {
+                canvasGradient = ctx.createLinearGradient(0, 0, window.innerWidth, window.innerHeight);
+                canvasGradient.addColorStop(0, currentTheme.colors[0]);
+                canvasGradient.addColorStop(1, currentTheme.colors[1]);
+            }
         }
         window.addEventListener('resize', syncCanvasDimensions);
-        syncCanvasDimensions();
 
+        /* --- Wireframe Engine --- */
+        let entities = [];
         class KineticEntity {
             constructor() {
                 this.x = Math.random() * window.innerWidth;
                 this.y = Math.random() * window.innerHeight;
-                this.vx = (Math.random() - 0.5) * 1.2;
-                this.vy = (Math.random() - 0.5) * 1.2;
+                this.vx = (Math.random() - 0.5) * 1.6;
+                this.vy = (Math.random() - 0.5) * 1.6;
                 this.mass = Math.random() * 2 + 0.5;
             }
             computePhysics() {
-                this.x += this.vx;
-                this.y += this.vy;
-                
-                // Boundary collision inversion
+                this.x += this.vx * speedMultiplier;
+                this.y += this.vy * speedMultiplier;
                 if (this.x < 0 || this.x > window.innerWidth) this.vx *= -1;
                 if (this.y < 0 || this.y > window.innerHeight) this.vy *= -1;
             }
-            render(context, inverseColor) {
+            render(context, entityColor) {
                 context.beginPath();
                 context.arc(this.x, this.y, this.mass, 0, Math.PI * 2);
-                context.fillStyle = inverseColor;
+                context.fillStyle = entityColor;
                 context.fill();
             }
         }
 
-        // Initialize entity pool
-        const entityCount = window.innerWidth < 768 ? 60 : 120;
-        for (let i = 0; i < entityCount; i++) entities.push(new KineticEntity());
+        function initWireframe() {
+            entities = [];
+            const entityCount = window.innerWidth < 600 ? 50 : 100;
+            for (let i = 0; i < entityCount; i++) entities.push(new KineticEntity());
+        }
 
-        function renderLoop() {
+        function renderWireframeFrame() {
             ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
             
-            // Dynamic contrast logic based on selected hex
-            const isLightBackground = currentThemeHex === '#ffffff';
-            const nodeColor = isLightBackground ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.6)';
+            const nodeColor = isForegroundGradient ? canvasGradient : fgColorString;
 
             entities.forEach(entity => {
                 entity.computePhysics();
                 entity.render(ctx, nodeColor);
             });
 
-            // Proximity networking calculations
             const connectionDistance = 140;
             for (let i = 0; i < entities.length; i++) {
                 for (let j = i + 1; j < entities.length; j++) {
@@ -223,9 +475,8 @@
                         const opacity = 1 - (distance / connectionDistance);
                         
                         ctx.beginPath();
-                        ctx.strokeStyle = isLightBackground 
-                            ? `rgba(0,0,0,${opacity * 0.5})` 
-                            : `rgba(255,255,255,${opacity * 0.5})`;
+                        ctx.globalAlpha = opacity * 0.5;
+                        ctx.strokeStyle = nodeColor;
                         ctx.lineWidth = 0.8;
                         ctx.moveTo(entities[i].x, entities[i].y);
                         ctx.lineTo(entities[j].x, entities[j].y);
@@ -233,50 +484,145 @@
                     }
                 }
             }
+            ctx.globalAlpha = 1.0;
+        }
+
+        /* --- Temporal Decay Matrix Engine --- */
+        const charset = 'アァカサタナハマヤャラワガザダバパイィキシチニヒミリヰギジヂビピウゥクスツヌフムユュルグズブヅプエェケセテネヘメレゲゼデベペオォコソトノホモヨョロゴゾドボポヴッン0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+        const fontSize = 16;
+        const trailLength = 22;
+        let columnsArray = [];
+
+        class MatrixColumn {
+            constructor(x) {
+                this.x = x;
+                this.headY = Math.random() * -100;
+                this.chars = Array(trailLength).fill('').map(() => charset[Math.floor(Math.random() * charset.length)]);
+            }
+            update() {
+                this.headY += 0.8 * speedMultiplier;
+                if (this.headY * fontSize > window.innerHeight && Math.random() > 0.975) {
+                    this.headY = 0;
+                    for(let i=0; i<trailLength; i++) this.chars[i] = charset[Math.floor(Math.random() * charset.length)];
+                }
+            }
+            render(context) {
+                context.fillStyle = isForegroundGradient ? canvasGradient : fgColorString;
+                for(let i = 0; i < trailLength; i++) {
+                    let yPos = this.headY - i;
+                    if (yPos < 0 || yPos * fontSize > window.innerHeight + fontSize) continue;
+                    
+                    context.globalAlpha = 1 - (i / trailLength);
+                    if (Math.random() > 0.98) this.chars[i] = charset[Math.floor(Math.random() * charset.length)];
+                    context.fillText(this.chars[i], this.x * fontSize, yPos * fontSize);
+                }
+            }
+        }
+
+        function initMatrix() {
+            const columns = Math.floor(window.innerWidth / fontSize) + 1;
+            columnsArray = [];
+            for (let x = 0; x < columns; x++) columnsArray.push(new MatrixColumn(x));
+        }
+
+        function renderMatrixFrame() {
+            ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+            ctx.font = `${fontSize}px monospace`;
+
+            for (let i = 0; i < columnsArray.length; i++) {
+                columnsArray[i].update();
+                columnsArray[i].render(ctx);
+            }
+            ctx.globalAlpha = 1.0;
+        }
+
+        /* --- Multiplexed Rendering Loop --- */
+        function renderLoop() {
+            if (activeEngine === 'wireframe') {
+                renderWireframeFrame();
+            } else {
+                renderMatrixFrame();
+            }
             requestAnimationFrame(renderLoop);
         }
-        renderLoop();
 
-        /* --- Theme Management --- */
-        window.updateTheme = function(hexColor) {
-            currentThemeHex = hexColor;
-            document.body.style.backgroundColor = hexColor;
+        /* --- Theme Management Architecture --- */
+        window.updateTheme = function(theme, pickerNode) {
+            currentTheme = theme;
             
-            // Update meta theme color dynamically for the PWA frame
-            const metaTheme = document.querySelector('meta[name="theme-color"]');
-            if(metaTheme) metaTheme.setAttribute('content', hexColor);
+            document.querySelectorAll('.color-node').forEach(n => n.classList.remove('selected'));
+            if (pickerNode) pickerNode.classList.add('selected');
+            
+            let bgStyle = '';
+            
+            if (theme.type === 'solid') {
+                isForegroundGradient = false;
+                bgStyle = theme.colors[0];
+                fgColorString = getLuminance(theme.colors[0]) > 0.5 ? '#000000' : '#ffffff';
+            } else if (theme.type === 'gradient') {
+                canvasGradient = ctx.createLinearGradient(0, 0, window.innerWidth, window.innerHeight);
+                canvasGradient.addColorStop(0, theme.colors[0]);
+                canvasGradient.addColorStop(1, theme.colors[1]);
+
+                if (gradientTarget === 'background') {
+                    isForegroundGradient = false;
+                    bgStyle = `linear-gradient(135deg, ${theme.colors[0]}, ${theme.colors[1]})`;
+                    const avgLuminance = (getLuminance(theme.colors[0]) + getLuminance(theme.colors[1])) / 2;
+                    fgColorString = avgLuminance > 0.5 ? '#000000' : '#ffffff';
+                } else {
+                    isForegroundGradient = true;
+                    bgStyle = '#0a0a0a'; 
+                    fgColorString = '#ffffff'; 
+                }
+            }
+            
+            // Delegate background drawing to DOM to maintain canvas transparency
+            document.body.style.background = bgStyle;
+            
+            // Apply calculated perceptual contrast to UI
+            const uiColor = isForegroundGradient ? '#ffffff' : fgColorString;
+            const uiBorder = uiColor === '#000000' ? 'rgba(0, 0, 0, 0.4)' : 'rgba(255, 255, 255, 0.4)';
+            
+            document.getElementById('ui-layer').style.color = uiColor;
+            document.getElementById('speed-slider').style.color = uiColor;
+            
+            document.querySelectorAll('.action-btn, #panel-toggle').forEach(btn => {
+                btn.style.color = uiColor;
+                btn.style.borderColor = uiBorder;
+            });
+            
+            document.querySelectorAll('.color-node').forEach(node => {
+                node.style.borderColor = uiBorder;
+            });
+            
+            if (pickerNode) pickerNode.style.borderColor = uiColor;
         };
 
-        /* --- Dynamic Service Worker Initialization --- */
+        /* --- Bootstrap Sequence --- */
+        window.addEventListener('load', () => {
+            initWireframe();
+            syncCanvasDimensions();
+            updateTheme({type: 'solid', colors: ['#000000']}, document.getElementById('node-black'));
+            
+            acquireWakeLock();
+            requestAnimationFrame(renderLoop);
+        });
+
+        /* --- Offline Service Worker --- */
         const serviceWorkerLogic = `
-            const CACHE_ID = 'kinetic-pwa-v1';
-            self.addEventListener('install', event => {
-                self.skipWaiting();
-            });
-            self.addEventListener('activate', event => {
-                event.waitUntil(clients.claim());
-            });
+            self.addEventListener('install', event => self.skipWaiting());
+            self.addEventListener('activate', event => event.waitUntil(clients.claim()));
             self.addEventListener('fetch', event => {
-                // Network-first strategy for a single-file construct
                 event.respondWith(
-                    fetch(event.request).catch(() => {
-                        return new Response('Application operates fully in offline mode via local cache.');
-                    })
+                    fetch(event.request).catch(() => new Response('Offline Mode Active'))
                 );
             });
         `;
-        const swBlobData = new Blob([serviceWorkerLogic], {type: 'application/javascript'});
-        const swObjectUrl = URL.createObjectURL(swBlobData);
-
+        const swBlob = new Blob([serviceWorkerLogic], {type: 'application/javascript'});
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register(swObjectUrl, { scope: '/' })
-                .then(registration => {
-                    console.log('Virtual ServiceWorker registered.');
-                })
-                .catch(error => {
-                    console.error('ServiceWorker registration failed:', error);
-                });
+                navigator.serviceWorker.register(URL.createObjectURL(swBlob), { scope: '/' })
+                .catch(err => console.error('SW Error:', err));
             });
         }
     </script>
