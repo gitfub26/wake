@@ -1,791 +1,3127 @@
-<!DOCTYPE html>
-<!--
-  AWAKE // PONG
-  ---------------------------------------------------------------
-  A single-file, dependency-free screensaver that keeps an iPhone
-  (or any modern browser) display from sleeping while it's open
-  in the foreground.
-
-  - Pure HTML/CSS/JS, no binary assets, no external requests.
-  - Classic monochrome Pong palette (white-on-black / black-on-white),
-    with a day/night toggle. Clock is rendered as real 7-segment
-    LED digits in CSS, no font files needed.
-  - One or more balls bounce freely off all four edges. Ball count
-    and speed are adjustable and saved to localStorage.
-  - Uses the Screen Wake Lock API (navigator.wakeLock).
-  - Canvas rendering capped at 2x pixel density and ~30fps; "glow"
-    is faked with layered low-alpha shapes instead of shadowBlur.
-
-  Usage: open in Safari, tap "Activate", optionally
-  Share -> Add to Home Screen for a full-screen app.
-
-  License: MIT
--->
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
+<meta charset="utf-8">
+
+<meta
+  name="viewport"
+  content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no"
+>
+
+<meta id="themeColorMeta" name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#000000">
-<title>AWAKE // PONG</title>
-<script>
-  // Apply saved theme before first paint to avoid a flash of the wrong theme.
-  (function(){
-    try{
-      var t = localStorage.getItem('pongAwakeTheme');
-      if(t === 'day') document.documentElement.setAttribute('data-theme', 'day');
-    }catch(e){}
-  })();
-</script>
+<meta name="mobile-web-app-capable" content="yes">
+
+<title>Awake</title>
+
 <style>
-  :root{
-    --bg:#000000;
-    --ink:#ffffff;
-    --bg-rgb: 0,0,0;
-    --ink-rgb: 255,255,255;
-  }
-  :root[data-theme="day"]{
-    --bg:#f4f3ef;
-    --ink:#111111;
-    --bg-rgb: 244,243,239;
-    --ink-rgb: 17,17,17;
-  }
+:root {
+  color-scheme: dark;
 
-  *{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+  --safe-t: max(env(safe-area-inset-top), 10px);
+  --safe-r: max(env(safe-area-inset-right), 12px);
+  --safe-b: max(env(safe-area-inset-bottom), 12px);
+  --safe-l: max(env(safe-area-inset-left), 12px);
 
-  html,body{
-    margin:0; padding:0;
-    width:100%; height:100%;
-    overscroll-behavior:none;
-    -webkit-user-select:none; user-select:none;
-  }
+  --background: #000;
+  --foreground: #fff;
+  --muted: #909096;
+  --line: rgba(255, 255, 255, 0.17);
+  --panel: rgba(0, 0, 0, 0.84);
+  --soft: rgba(255, 255, 255, 0.08);
+  --button-background: #050505;
+  --shadow: rgba(0, 0, 0, 0.8);
+}
 
-  body{
-    height:100dvh;
-    overflow:hidden;
-    position:fixed; inset:0;
-    background: var(--bg);
-    color: var(--ink);
-    font-family: "Courier New", Courier, monospace;
-    display:flex;
-    flex-direction:column;
-    transition: background-color .5s ease, color .5s ease;
-  }
+html[data-theme="day"] {
+  color-scheme: light;
 
-  /* ---------- background game canvas ---------- */
-  #game{
-    position:absolute; inset:0;
-    width:100%; height:100%;
-    display:block;
-    z-index:0;
-  }
+  --background: #f4f4f1;
+  --foreground: #080808;
+  --muted: #5f6064;
+  --line: rgba(0, 0, 0, 0.17);
+  --panel: rgba(247, 247, 244, 0.88);
+  --soft: rgba(0, 0, 0, 0.07);
+  --button-background: #fff;
+  --shadow: rgba(0, 0, 0, 0.22);
+}
 
-  /* ---------- CRT scanlines + vignette (static overlays, GPU-composited) ---------- */
-  .scanlines{
-    position:absolute; inset:0;
-    z-index:2;
-    pointer-events:none;
-    background: repeating-linear-gradient(
-      to bottom,
-      rgba(0,0,0,0) 0px,
-      rgba(0,0,0,0) 2px,
-      rgba(0,0,0,0.18) 3px,
-      rgba(0,0,0,0.18) 4px
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+
+  background: var(--background);
+  color: var(--foreground);
+
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Display",
+    "Helvetica Neue",
+    Arial,
+    sans-serif;
+
+  touch-action: manipulation;
+
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  color: inherit;
+}
+
+#scene {
+  position: fixed;
+  inset: 0;
+
+  width: 100%;
+  height: 100%;
+
+  display: block;
+  background: var(--background);
+}
+
+#vignette {
+  position: fixed;
+  inset: 0;
+
+  pointer-events: none;
+
+  background:
+    radial-gradient(
+      circle at center,
+      transparent 38%,
+      rgba(0, 0, 0, 0.16) 78%,
+      rgba(0, 0, 0, 0.48) 100%
     );
-    mix-blend-mode: multiply;
-    opacity:0.5;
-  }
-  :root[data-theme="day"] .scanlines{ opacity:0.18; }
 
-  .vignette{
-    position:absolute; inset:0;
-    z-index:2;
-    pointer-events:none;
-    background: radial-gradient(ellipse at center, rgba(0,0,0,0) 45%, rgba(0,0,0,0.7) 100%);
+  transition: opacity 0.3s ease;
+}
+
+html[data-theme="day"] #vignette {
+  opacity: 0.22;
+}
+
+#clock {
+  position: fixed;
+  z-index: 3;
+
+  top: 43%;
+  left: 50%;
+
+  transform: translate(-50%, -50%);
+
+  color: var(--foreground);
+
+  text-align: center;
+  white-space: nowrap;
+
+  pointer-events: none;
+
+  text-shadow:
+    0 2px 22px var(--background),
+    0 0 3px var(--background);
+}
+
+#time {
+  font-size: clamp(44px, 14vw, 96px);
+  font-weight: 200;
+  letter-spacing: -0.055em;
+  line-height: 0.9;
+  font-variant-numeric: tabular-nums;
+}
+
+#date {
+  margin-top: 12px;
+
+  font-size: clamp(14px, 4vw, 22px);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+
+  opacity: 0.72;
+}
+
+#topStatus {
+  position: fixed;
+  z-index: 8;
+
+  top: var(--safe-t);
+  left: 50%;
+
+  transform: translateX(-50%);
+
+  display: flex;
+  align-items: center;
+  gap: 7px;
+
+  max-width: calc(100vw - 120px);
+  min-height: 30px;
+
+  padding: 6px 11px;
+
+  overflow: hidden;
+
+  border: 1px solid var(--line);
+  border-radius: 999px;
+
+  background: var(--panel);
+
+  font-size: 10px;
+  font-weight: 720;
+  letter-spacing: 0.055em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+
+  flex: 0 0 auto;
+
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+#topStatus.active .dot {
+  background: var(--foreground);
+  box-shadow: 0 0 10px var(--foreground);
+}
+
+#themeToggle {
+  position: fixed;
+  z-index: 12;
+
+  top: var(--safe-t);
+  right: var(--safe-r);
+
+  width: 38px;
+  height: 38px;
+  padding: 0;
+
+  display: grid;
+  place-items: center;
+
+  border: 1px solid var(--line);
+  border-radius: 50%;
+
+  background: var(--panel);
+  color: var(--foreground);
+
+  cursor: pointer;
+
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+
+  transition:
+    transform 0.18s ease,
+    background 0.3s ease,
+    color 0.3s ease;
+}
+
+#themeToggle:active {
+  transform: scale(0.92);
+}
+
+#themeToggle svg {
+  position: absolute;
+
+  width: 19px;
+  height: 19px;
+
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+
+  transition:
+    transform 0.3s ease,
+    opacity 0.3s ease;
+}
+
+#themeToggle .sun {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
+}
+
+#themeToggle .moon {
+  opacity: 0;
+  transform: rotate(-50deg) scale(0.6);
+}
+
+html[data-theme="day"] #themeToggle .sun {
+  opacity: 0;
+  transform: rotate(50deg) scale(0.6);
+}
+
+html[data-theme="day"] #themeToggle .moon {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
+}
+
+#controlsDock {
+  position: fixed;
+  z-index: 9;
+
+  right: var(--safe-r);
+  bottom: calc(var(--safe-b) + 82px);
+  left: var(--safe-l);
+
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  transition:
+    transform 0.28s ease,
+    opacity 0.28s ease;
+}
+
+#controlsDock.hidden {
+  transform: translateY(calc(100% + 12px));
+  opacity: 0;
+  pointer-events: none;
+}
+
+#modeStrip {
+  display: flex;
+  gap: 6px;
+
+  padding: 7px;
+  overflow-x: auto;
+
+  border: 1px solid var(--line);
+  border-radius: 18px;
+
+  background: var(--panel);
+
+  scrollbar-width: none;
+
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+#modeStrip::-webkit-scrollbar {
+  display: none;
+}
+
+.mode {
+  min-width: 62px;
+  height: 52px;
+  padding: 4px;
+
+  flex: 1 0 62px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+
+  border: 1px solid transparent;
+  border-radius: 12px;
+
+  background: transparent;
+  color: var(--muted);
+
+  cursor: pointer;
+}
+
+.mode svg {
+  width: 18px;
+  height: 18px;
+
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mode span {
+  font-size: 9px;
+  font-weight: 720;
+  letter-spacing: 0.04em;
+}
+
+.mode.active {
+  border-color: var(--line);
+
+  background: var(--soft);
+  color: var(--foreground);
+}
+
+#settings {
+  padding: 12px 12px 10px;
+
+  border: 1px solid var(--line);
+  border-radius: 18px;
+
+  background: var(--panel);
+
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.settingsHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  margin-bottom: 8px;
+}
+
+#modeTitle {
+  flex: 1;
+
+  font-size: 12px;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.settingsActions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.textButton {
+  padding: 4px 0;
+
+  border: 0;
+
+  background: transparent;
+  color: var(--muted);
+
+  font-size: 11px;
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+#resetControls {
+  color: var(--foreground);
+}
+
+.sliders {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.control {
+  display: grid;
+  grid-template-columns: 68px 1fr 34px;
+  gap: 8px;
+  align-items: center;
+}
+
+.control label,
+.control output {
+  color: var(--muted);
+
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+}
+
+.control output {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+input[type="range"] {
+  width: 100%;
+  height: 20px;
+  margin: 0;
+
+  appearance: none;
+  -webkit-appearance: none;
+
+  background: transparent;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 2px;
+
+  border-radius: 2px;
+  background: var(--line);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  width: 16px;
+  height: 16px;
+  margin-top: -7px;
+
+  appearance: none;
+  -webkit-appearance: none;
+
+  border: 1px solid var(--line);
+  border-radius: 50%;
+
+  background: var(--foreground);
+
+  box-shadow: 0 0 0 4px var(--soft);
+}
+
+input[type="range"]::-moz-range-track {
+  height: 2px;
+  background: var(--line);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+
+  border: 1px solid var(--line);
+  border-radius: 50%;
+
+  background: var(--foreground);
+}
+
+#bottomBar {
+  position: fixed;
+  z-index: 10;
+
+  right: 0;
+  bottom: var(--safe-b);
+  left: 0;
+
+  height: 70px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  pointer-events: none;
+}
+
+#power {
+  position: relative;
+
+  width: 64px;
+  height: 64px;
+
+  display: grid;
+  place-items: center;
+
+  border: 1px solid var(--line);
+  border-radius: 50%;
+
+  background: var(--button-background);
+  color: var(--foreground);
+
+  box-shadow:
+    0 10px 30px var(--shadow),
+    inset 0 0 0 1px var(--soft);
+
+  cursor: pointer;
+  pointer-events: auto;
+
+  transition:
+    transform 0.14s ease,
+    background 0.25s ease,
+    color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+#power:active {
+  transform: scale(0.94);
+}
+
+#power svg {
+  width: 25px;
+  height: 25px;
+
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+#power.active {
+  background: var(--foreground);
+  color: var(--background);
+
+  box-shadow:
+    0 0 0 5px var(--soft),
+    0 0 34px var(--line);
+}
+
+#powerRing {
+  position: absolute;
+  inset: -5px;
+
+  border: 1px solid transparent;
+  border-radius: 50%;
+
+  pointer-events: none;
+}
+
+#power.active #powerRing {
+  border-color: var(--line);
+  animation: powerPulse 2s ease-in-out infinite;
+}
+
+@keyframes powerPulse {
+  50% {
+    transform: scale(1.08);
+    opacity: 0.3;
   }
-  :root[data-theme="day"] .vignette{
-    background: radial-gradient(ellipse at center, rgba(0,0,0,0) 45%, rgba(0,0,0,0.16) 100%);
+}
+
+#showControls {
+  position: fixed;
+  z-index: 9;
+
+  bottom: calc(var(--safe-b) + 86px);
+  left: 50%;
+
+  display: none;
+
+  padding: 9px 14px;
+
+  transform: translateX(-50%);
+
+  border: 1px solid var(--line);
+  border-radius: 999px;
+
+  background: var(--panel);
+  color: var(--foreground);
+
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+
+  cursor: pointer;
+
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+}
+
+#showControls.visible {
+  display: block;
+}
+
+#notice {
+  position: fixed;
+  z-index: 20;
+
+  top: calc(var(--safe-t) + 43px);
+  left: 50%;
+
+  max-width: calc(100vw - 28px);
+  padding: 9px 12px;
+
+  transform: translate(-50%, -8px);
+
+  border: 1px solid var(--line);
+  border-radius: 12px;
+
+  background: var(--panel);
+  color: var(--foreground);
+
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: center;
+
+  opacity: 0;
+  pointer-events: none;
+
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
+}
+
+#notice.show {
+  transform: translate(-50%, 0);
+  opacity: 1;
+}
+
+@media (orientation: landscape) {
+  #clock {
+    top: 38%;
   }
 
-  /* ---------- day / night toggle ---------- */
-  .theme-toggle{
-    position:absolute;
-    top: calc(env(safe-area-inset-top, 0px) + 16px);
-    left:50%;
-    transform:translateX(-50%);
-    z-index:3;
-    appearance:none; -webkit-appearance:none;
-    background:transparent;
-    border: 2px solid var(--ink);
-    opacity:0.35;
-    border-radius: 999px;
-    width:56px; height:30px;
-    padding:3px;
-    cursor:pointer;
-    transition: opacity .25s ease, border-color .5s ease;
-  }
-  .theme-toggle:active{ opacity:0.7; }
-  .theme-track{ position:relative; display:block; width:100%; height:100%; }
-  .theme-thumb{
-    position:absolute; top:50%; left:0;
-    width:20px; height:20px;
-    margin-top:-10px;
-    border-radius:50%;
-    background: var(--ink);
-    transition: left .3s ease, background-color .5s ease;
-  }
-  :root[data-theme="day"] .theme-thumb{ left: calc(100% - 20px); }
-
-  /* ---------- center clock ---------- */
-  .hud{
-    position:relative;
-    flex:1;
-    z-index:1;
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    justify-content:center;
-    pointer-events:none;
-    text-align:center;
-    padding: 0 4vw;
-    min-height:0;
+  #time {
+    font-size: clamp(42px, 10vw, 78px);
   }
 
-  /* 7-segment LED clock, built from CSS shapes (no font files) */
-  .clock{
-    --seg-on: var(--ink);
-    --seg-off: var(--ink);
-    font-size: clamp(2.4rem, 16vw, 6.5rem);
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    gap: 0.14em;
-  }
-  .digits{ display:flex; gap: 0.10em; }
-  .digit{ position:relative; width:0.62em; height:1em; flex:0 0 auto; }
-
-  .seg{
-    position:absolute;
-    background: var(--seg-off);
-    opacity:0.06;
-    transition: opacity .12s linear, background-color .5s ease, box-shadow .3s ease;
-  }
-  .seg.on{ background: var(--seg-on); opacity:1; }
-
-  .seg-a, .seg-g, .seg-d{
-    left:0.07em; width:0.48em; height:0.11em;
-    clip-path: polygon(12% 0%, 88% 0%, 100% 50%, 88% 100%, 12% 100%, 0% 50%);
-  }
-  .seg-a{ top:0; }
-  .seg-g{ top:0.445em; }
-  .seg-d{ top:0.89em; }
-
-  .seg-f, .seg-b, .seg-e, .seg-c{
-    width:0.11em; height:0.445em;
-    clip-path: polygon(0% 12%, 50% 0%, 100% 12%, 100% 88%, 50% 100%, 0% 88%);
-  }
-  .seg-f{ top:0.055em; left:0; }
-  .seg-b{ top:0.055em; left:0.51em; }
-  .seg-e{ top:0.505em; left:0; }
-  .seg-c{ top:0.505em; left:0.51em; }
-
-  .colon{
-    display:flex; flex-direction:column; align-items:center; justify-content:center;
-    height:1em; gap:0.18em; padding:0 0.02em;
-  }
-  .colon i{
-    display:block; width:0.1em; height:0.1em; border-radius:50%;
-    background: var(--ink); opacity:0.9;
-    transition: background-color .5s ease, box-shadow .3s ease;
+  #controlsDock {
+    right: calc(var(--safe-r) + 5vw);
+    bottom: calc(var(--safe-b) + 62px);
+    left: calc(var(--safe-l) + 5vw);
   }
 
-  body.boosted .seg.on{
-    box-shadow: 0 0 0.06em rgba(var(--ink-rgb),0.85), 0 0 0.18em rgba(var(--ink-rgb),0.35);
-  }
-  body.boosted .colon i{
-    box-shadow: 0 0 0.06em rgba(var(--ink-rgb),0.85);
+  #modeStrip {
+    padding: 5px;
   }
 
-  .ampm{
-    margin-top: clamp(0.7rem, 3.5vh, 1.4rem);
-    font-size: clamp(0.75rem, 3vw, 1.05rem);
-    letter-spacing: 0.4em;
-    font-weight:700;
-    opacity:0.55;
+  .mode {
+    min-width: 78px;
+    height: 42px;
+
+    flex-direction: row;
   }
 
-  .date{
-    margin-top: clamp(0.4rem, 2vh, 0.9rem);
-    font-size: clamp(0.7rem, 2.8vw, 1rem);
-    letter-spacing: 0.35em;
-    font-weight:700;
-    opacity:0.4;
-    text-transform:uppercase;
+  .mode span {
+    font-size: 8px;
   }
 
-  /* ---------- controls ---------- */
-  .controls{
-    position:relative;
-    z-index:3;
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    gap: 10px;
-    padding: 10px 6vw calc(env(safe-area-inset-bottom, 0px) + 18px);
+  #settings {
+    padding: 8px 12px;
   }
 
-  .setting-row{
-    width:min(420px, 86vw);
-    display:flex;
-    align-items:center;
-    gap: 14px;
-  }
-  .setting-label{
-    font-size: clamp(0.6rem, 2.4vw, 0.78rem);
-    letter-spacing:0.35em;
-    font-weight:700;
-    opacity:0.5;
-    white-space:nowrap;
+  .settingsHead {
+    margin-bottom: 2px;
   }
 
-  .balls-row{ justify-content:space-between; }
-  .stepper{ display:flex; align-items:center; gap:14px; }
-  .step-btn{
-    appearance:none; -webkit-appearance:none;
-    width:34px; height:34px;
-    border:2px solid var(--ink);
-    background:transparent;
-    color:var(--ink);
-    border-radius:8px;
-    font-size:1.1rem;
-    font-weight:800;
-    font-family:inherit;
-    line-height:1;
-    cursor:pointer;
-    display:flex; align-items:center; justify-content:center;
-    transition: border-color .5s ease, background-color .25s ease, color .25s ease, opacity .2s ease;
-  }
-  .step-btn:active{ transform:scale(0.94); }
-  .step-btn:disabled{ opacity:0.25; }
-  #ballCount{
-    min-width:1.6ch;
-    text-align:center;
-    font-size:1.15rem;
-    font-weight:800;
-    font-variant-numeric:tabular-nums;
+  .sliders {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
   }
 
-  .speed-row input[type="range"]{
-    flex:1;
-    -webkit-appearance:none;
-    appearance:none;
-    height:2px;
-    background: rgba(var(--ink-rgb),0.25);
-    border-radius:2px;
-    outline:none;
-  }
-  .speed-row input[type="range"]::-webkit-slider-thumb{
-    -webkit-appearance:none;
-    width:20px; height:20px;
-    border-radius:50%;
-    background: var(--ink);
-    cursor:pointer;
-    transition: background-color .5s ease;
-  }
-  .speed-row input[type="range"]::-moz-range-thumb{
-    width:20px; height:20px;
-    border:none;
-    border-radius:50%;
-    background: var(--ink);
-    cursor:pointer;
-    transition: background-color .5s ease;
-  }
-  #speedValue{
-    min-width:3.4ch;
-    text-align:right;
-    font-size:0.85rem;
-    font-weight:800;
-    opacity:0.55;
-    font-variant-numeric:tabular-nums;
+  .control {
+    grid-template-columns: 50px 1fr 26px;
   }
 
-  .power-btn{
-    appearance:none;
-    -webkit-appearance:none;
-    width: clamp(64px, 18vw, 84px);
-    height: clamp(64px, 18vw, 84px);
-    border-radius: 50%;
-    border: 2px solid var(--ink);
-    background: transparent;
-    cursor:pointer;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    transition: background-color .25s ease, border-color .5s ease, box-shadow .25s ease, transform .15s ease;
-    margin-top:4px;
-  }
-  .power-btn:active{ transform: scale(0.94); }
-  .power-btn svg{
-    width:42%;
-    height:42%;
-    fill:none;
-    stroke: var(--ink);
-    stroke-width:2.5;
-    stroke-linecap:round;
-    stroke-linejoin:round;
-    transition: stroke .25s ease;
+  #bottomBar {
+    height: 58px;
   }
 
-  /* "Active" = fully inverted, like a lit arcade button */
-  .power-btn.active{
-    background: var(--ink);
-    box-shadow:
-      0 0 18px rgba(var(--ink-rgb),0.35),
-      0 0 60px rgba(var(--ink-rgb),0.15);
-    animation: pulse 2.4s ease-in-out infinite;
-  }
-  .power-btn.active svg{ stroke: var(--bg); }
-
-  @keyframes pulse{
-    0%,100%{ box-shadow: 0 0 18px rgba(var(--ink-rgb),0.35), 0 0 60px rgba(var(--ink-rgb),0.15); }
-    50%{ box-shadow: 0 0 28px rgba(var(--ink-rgb),0.6), 0 0 90px rgba(var(--ink-rgb),0.3); }
+  #power {
+    width: 52px;
+    height: 52px;
   }
 
-  .status{
-    font-size: clamp(0.6rem, 2.6vw, 0.78rem);
-    letter-spacing: 0.4em;
-    text-transform:uppercase;
-    font-weight:700;
-    color: var(--ink);
-    opacity:0.3;
-    transition: opacity .4s ease, color .5s ease;
+  #showControls {
+    bottom: calc(var(--safe-b) + 67px);
   }
-  .status.on{ opacity:0.85; }
+}
 
-  @media (prefers-reduced-motion: reduce){
-    .power-btn.active{ animation:none; }
+@media (max-height: 520px) and (orientation: landscape) {
+  #clock {
+    top: 34%;
   }
+
+  #date {
+    margin-top: 7px;
+  }
+
+  .mode {
+    height: 38px;
+  }
+
+  #settings {
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+
+  .control {
+    gap: 5px;
+  }
+
+  .sliders {
+    gap: 8px;
+  }
+}
 </style>
 </head>
+
 <body>
+<canvas id="scene"></canvas>
+<div id="vignette"></div>
 
-  <canvas id="game"></canvas>
-  <div class="scanlines"></div>
-  <div class="vignette"></div>
+<div id="topStatus">
+  <span class="dot"></span>
+  <span id="statusText">Ready · Tap power</span>
+</div>
 
-  <button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle day and night mode" aria-pressed="false">
-    <span class="theme-track"><span class="theme-thumb"></span></span>
-  </button>
+<button
+  id="themeToggle"
+  type="button"
+  aria-label="Switch to day mode"
+>
+  <svg class="sun" viewBox="0 0 24 24" aria-hidden="true">
+    <circle cx="12" cy="12" r="3.5"></circle>
+    <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42"></path>
+  </svg>
 
-  <div class="hud">
-    <div class="clock">
-      <div class="digits" id="hh"></div>
-      <div class="colon"><i></i><i></i></div>
-      <div class="digits" id="mm"></div>
-    </div>
-    <div id="ampm" class="ampm">AM</div>
-    <div id="date" class="date">— — —</div>
-  </div>
+  <svg class="moon" viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M20.5 15.3A8.5 8.5 0 0 1 8.7 3.5 8.5 8.5 0 1 0 20.5 15.3z"></path>
+  </svg>
+</button>
 
-  <div class="controls">
-    <div class="setting-row balls-row">
-      <span class="setting-label">BALLS</span>
-      <div class="stepper">
-        <button id="ballsMinus" class="step-btn" type="button" aria-label="Remove a ball">&#8722;</button>
-        <span id="ballCount">1</span>
-        <button id="ballsPlus" class="step-btn" type="button" aria-label="Add a ball">+</button>
+<div id="notice"></div>
+
+<div id="clock">
+  <div id="time">12:00</div>
+  <div id="date">Jul 20, 2026</div>
+</div>
+
+<div id="controlsDock">
+  <div id="modeStrip" aria-label="Visual modes"></div>
+
+  <section id="settings">
+    <div class="settingsHead">
+      <span id="modeTitle">Matrix</span>
+
+      <div class="settingsActions">
+        <button
+          id="resetControls"
+          class="textButton"
+          type="button"
+        >
+          Reset
+        </button>
+
+        <button
+          id="hideControls"
+          class="textButton"
+          type="button"
+        >
+          Hide
+        </button>
       </div>
     </div>
 
-    <div class="setting-row speed-row">
-      <span class="setting-label">SPEED</span>
-      <input id="speedSlider" type="range" min="0.3" max="2.5" step="0.05" value="1" aria-label="Ball speed">
-      <span id="speedValue">1.0&times;</span>
-    </div>
+    <div class="sliders">
+      <div class="control">
+        <label for="speed">Speed</label>
+        <input id="speed" type="range" min="0" max="100">
+        <output id="speedOut">50</output>
+      </div>
 
-    <button id="activateBtn" class="power-btn" type="button" aria-label="Toggle keep-awake">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 3 V11"/>
-        <path d="M6.5 6.5a8 8 0 1 0 11 0"/>
-      </svg>
-    </button>
-    <div id="status" class="status">TAP TO STAY AWAKE</div>
-  </div>
+      <div class="control">
+        <label for="intensity">Intensity</label>
+        <input id="intensity" type="range" min="0" max="100">
+        <output id="intensityOut">50</output>
+      </div>
+
+      <div class="control">
+        <label for="brightness">Brightness</label>
+        <input id="brightness" type="range" min="10" max="100">
+        <output id="brightnessOut">80</output>
+      </div>
+    </div>
+  </section>
+</div>
+
+<button id="showControls" type="button">
+  Show Controls
+</button>
+
+<div id="bottomBar">
+  <button
+    id="power"
+    type="button"
+    aria-label="Activate wake lock"
+  >
+    <span id="powerRing"></span>
+
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 2.8v8.4"></path>
+      <path d="M7.15 5.75a8 8 0 1 0 9.7 0"></path>
+    </svg>
+  </button>
+</div>
 
 <script>
-(function(){
+(() => {
   "use strict";
 
-  // ============================================================
-  //  THEME (day / night)
-  // ============================================================
-  var root = document.documentElement;
-  var themeToggle = document.getElementById('themeToggle');
-  var inkRGB = '255,255,255';
-  var bgRGB  = '0,0,0';
+  const $ = (selector) => document.querySelector(selector);
 
-  function readThemeColors(){
-    var cs = getComputedStyle(root);
-    inkRGB = cs.getPropertyValue('--ink-rgb').trim();
-    bgRGB  = cs.getPropertyValue('--bg-rgb').trim();
-  }
+  const canvas = $("#scene");
 
-  function applyThemeUI(){
-    var isDay = root.getAttribute('data-theme') === 'day';
-    themeToggle.setAttribute('aria-pressed', isDay ? 'true' : 'false');
-    readThemeColors();
-  }
-
-  themeToggle.addEventListener('click', function(){
-    var isDay = root.getAttribute('data-theme') === 'day';
-    if(isDay){
-      root.removeAttribute('data-theme');
-    } else {
-      root.setAttribute('data-theme', 'day');
-    }
-    try{ localStorage.setItem('pongAwakeTheme', isDay ? 'night' : 'day'); }catch(e){}
-    applyThemeUI();
+  const context = canvas.getContext("2d", {
+    alpha: false
   });
 
-  applyThemeUI();
+  const elements = {
+    status: $("#topStatus"),
+    statusText: $("#statusText"),
+    notice: $("#notice"),
+    power: $("#power"),
+    themeToggle: $("#themeToggle"),
+    themeColorMeta: $("#themeColorMeta"),
+    dock: $("#controlsDock"),
+    showControls: $("#showControls"),
+    hideControls: $("#hideControls"),
+    resetControls: $("#resetControls"),
+    modeStrip: $("#modeStrip"),
+    modeTitle: $("#modeTitle"),
+    speed: $("#speed"),
+    intensity: $("#intensity"),
+    brightness: $("#brightness"),
+    speedOut: $("#speedOut"),
+    intensityOut: $("#intensityOut"),
+    brightnessOut: $("#brightnessOut"),
+    time: $("#time"),
+    date: $("#date")
+  };
 
-  // ============================================================
-  //  CANVAS — free-roaming bouncing balls
-  //  Performance notes:
-  //   - pixel ratio capped at 2 (Pro/Max phones report 3, which
-  //     quadruples the pixel count for almost no visual gain)
-  //   - render loop capped to ~30fps
-  //   - "glow" = a few flat, low-alpha shapes instead of
-  //     ctx.shadowBlur, which is extremely expensive on iOS
-  // ============================================================
-  var canvas = document.getElementById('game');
-  var ctx = canvas.getContext('2d', { alpha: false });
-  var DPR = Math.min(window.devicePixelRatio || 1, 2);
-  var W = 0, H = 0;
-  var boosted = false;
-  var ballR = 8;
-  var balls = [];
+  const MODES = [
+    {
+      id: "matrix",
+      name: "Matrix",
+      icon: `
+        <path d="M5 4v16M9 4v10M13 8v12M17 4v16M20 7v8"></path>
+        <path d="M3 7h4M11 12h4M15 6h4M7 17h4"></path>
+      `
+    },
+    {
+      id: "pong",
+      name: "Pong",
+      icon: `
+        <rect x="3" y="6" width="2.5" height="12" rx="1"></rect>
+        <rect x="18.5" y="6" width="2.5" height="12" rx="1"></rect>
+        <circle cx="12" cy="12" r="2"></circle>
+        <path d="M12 3v2M12 19v2"></path>
+      `
+    },
+    {
+      id: "rain",
+      name: "Rain",
+      icon: `
+        <path d="M5 5l-2 5M11 3L8 10M17 5l-3 7"></path>
+        <path d="M21 3l-2 5M7 14l-3 7M14 15l-3 6M20 13l-3 7"></path>
+      `
+    },
+    {
+      id: "wire",
+      name: "Wire",
+      icon: `
+        <path d="M3 18l4-12 5 12 5-12 4 12"></path>
+        <path d="M3 18h18M5 13h14M6 9h12"></path>
+      `
+    },
+    {
+      id: "stars",
+      name: "Stars",
+      icon: `
+        <path d="M12 2l1.2 6.8L20 10l-6.8 1.2L12 18l-1.2-6.8L4 10l6.8-1.2L12 2z"></path>
+        <path d="M19 17l.5 2.5L22 20l-2.5.5L19 23l-.5-2.5L16 20l2.5-.5L19 17z"></path>
+      `
+    },
+    {
+      id: "tetris",
+      name: "Tetris",
+      icon: `
+        <rect x="4" y="4" width="5" height="5"></rect>
+        <rect x="9" y="4" width="5" height="5"></rect>
+        <rect x="9" y="9" width="5" height="5"></rect>
+        <rect x="14" y="9" width="5" height="5"></rect>
+        <rect x="9" y="14" width="5" height="5"></rect>
+        <rect x="14" y="14" width="5" height="5"></rect>
+      `
+    }
+  ];
 
-  var MIN_BALLS = 1;
-  var MAX_BALLS = 12;
-  var speedMul = 1;
+  const DEFAULTS = {
+    matrix: [48, 58, 78],
+    pong: [45, 50, 82],
+    rain: [60, 66, 72],
+    wire: [42, 55, 68],
+    stars: [52, 62, 82],
+    tetris: [45, 62, 84]
+  };
 
-  function resize(){
-    W = window.innerWidth;
-    H = window.innerHeight;
-    canvas.width  = Math.round(W * DPR);
-    canvas.height = Math.round(H * DPR);
-    canvas.style.width  = W + 'px';
-    canvas.style.height = H + 'px';
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    ballR = Math.max(5, Math.min(W, H) * 0.014);
-    for(var i=0; i<balls.length; i++){
-      balls[i].x = clamp(balls[i].x, ballR, W - ballR);
-      balls[i].y = clamp(balls[i].y, ballR, H - ballR);
+  const TETRIS_SHAPES = [
+    [
+      [1, 1, 1, 1]
+    ],
+    [
+      [1, 1],
+      [1, 1]
+    ],
+    [
+      [0, 1, 0],
+      [1, 1, 1]
+    ],
+    [
+      [0, 1, 1],
+      [1, 1, 0]
+    ],
+    [
+      [1, 1, 0],
+      [0, 1, 1]
+    ],
+    [
+      [1, 0, 0],
+      [1, 1, 1]
+    ],
+    [
+      [0, 0, 1],
+      [1, 1, 1]
+    ]
+  ];
+
+  let preferences;
+
+  try {
+    preferences = JSON.parse(
+      localStorage.getItem("awakePreferences") || "{}"
+    );
+  } catch {
+    preferences = {};
+  }
+
+  let theme =
+    preferences.theme === "day"
+      ? "day"
+      : "night";
+
+  let mode = MODES.some(
+    (item) => item.id === preferences.mode
+  )
+    ? preferences.mode
+    : "matrix";
+
+  /*
+    Migrate an old saved strobe selection.
+  */
+  if (mode === "strobe") {
+    mode = "tetris";
+  }
+
+  let controlsHidden = Boolean(
+    preferences.controlsHidden
+  );
+
+  let settings =
+    preferences.settings &&
+    typeof preferences.settings === "object"
+      ? preferences.settings
+      : {};
+
+  delete settings.strobe;
+
+  for (const item of MODES) {
+    if (!settings[item.id]) {
+      settings[item.id] = {
+        speed: DEFAULTS[item.id][0],
+        intensity: DEFAULTS[item.id][1],
+        brightness: DEFAULTS[item.id][2]
+      };
     }
   }
 
-  function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
+  let width = 1;
+  let height = 1;
+  let pixelRatio = 1;
 
-  function spawnBall(){
-    var baseSpeed = Math.min(W, H) * 0.0042;
-    var speed = baseSpeed * (0.7 + Math.random() * 0.6); // slight variety per ball
-    var angle = Math.random() * Math.PI * 2;
-    return {
-      x: ballR + Math.random() * (W - ballR * 2),
-      y: ballR + Math.random() * (H - ballR * 2),
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed
+  let previousFrameTime = performance.now();
+  let animationState = {};
+
+  let wakeLock = null;
+  let wakeLockWanted = false;
+
+  let noticeTimer = 0;
+
+  function savePreferences() {
+    try {
+      localStorage.setItem(
+        "awakePreferences",
+        JSON.stringify({
+          theme,
+          mode,
+          controlsHidden,
+          settings
+        })
+      );
+    } catch {
+      // The app remains usable without local storage.
+    }
+  }
+
+  function clamp(value, minimum, maximum) {
+    return Math.max(
+      minimum,
+      Math.min(maximum, value)
+    );
+  }
+
+  function random(minimum, maximum) {
+    return minimum +
+      Math.random() *
+      (maximum - minimum);
+  }
+
+  function isDayMode() {
+    return theme === "day";
+  }
+
+  function backgroundColor(alpha = 1) {
+    return isDayMode()
+      ? `rgba(244,244,241,${alpha})`
+      : `rgba(0,0,0,${alpha})`;
+  }
+
+  function foregroundColor(alpha = 1) {
+    return isDayMode()
+      ? `rgba(8,8,8,${alpha})`
+      : `rgba(255,255,255,${alpha})`;
+  }
+
+  function currentSettings() {
+    return settings[mode];
+  }
+
+  function showNotice(message, duration = 2600) {
+    elements.notice.textContent = message;
+    elements.notice.classList.add("show");
+
+    clearTimeout(noticeTimer);
+
+    noticeTimer = setTimeout(() => {
+      elements.notice.classList.remove("show");
+    }, duration);
+  }
+
+  function setStatus(text, type = "") {
+    elements.statusText.textContent = text;
+    elements.status.className = type;
+  }
+
+  function clearScene() {
+    context.fillStyle = backgroundColor();
+    context.fillRect(0, 0, width, height);
+  }
+
+  function applyTheme() {
+    document.documentElement.dataset.theme = theme;
+
+    elements.themeColorMeta.content =
+      isDayMode()
+        ? "#f4f4f1"
+        : "#000000";
+
+    elements.themeToggle.setAttribute(
+      "aria-label",
+      isDayMode()
+        ? "Switch to night mode"
+        : "Switch to day mode"
+    );
+
+    clearScene();
+    resetCurrentMode();
+  }
+
+  function resizeCanvas() {
+    pixelRatio = Math.min(
+      window.devicePixelRatio || 1,
+      2
+    );
+
+    width = Math.max(1, window.innerWidth);
+    height = Math.max(1, window.innerHeight);
+
+    canvas.width = Math.round(width * pixelRatio);
+    canvas.height = Math.round(height * pixelRatio);
+
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+
+    context.setTransform(
+      pixelRatio,
+      0,
+      0,
+      pixelRatio,
+      0,
+      0
+    );
+
+    clearScene();
+    resetCurrentMode();
+  }
+
+  function resetCurrentMode() {
+    animationState = {};
+
+    switch (mode) {
+      case "matrix":
+        initializeMatrix();
+        break;
+
+      case "pong":
+        initializePong();
+        break;
+
+      case "rain":
+        initializeRain();
+        break;
+
+      case "wire":
+        initializeWireframe();
+        break;
+
+      case "stars":
+        initializeStars();
+        break;
+
+      case "tetris":
+        initializeTetris();
+        break;
+    }
+  }
+
+  function renderModeSelector() {
+    elements.modeStrip.innerHTML = MODES
+      .map((item) => {
+        const activeClass =
+          item.id === mode
+            ? " active"
+            : "";
+
+        return `
+          <button
+            class="mode${activeClass}"
+            data-mode="${item.id}"
+            type="button"
+            aria-label="${item.name}"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              ${item.icon}
+            </svg>
+
+            <span>${item.name}</span>
+          </button>
+        `;
+      })
+      .join("");
+
+    elements.modeStrip
+      .querySelector(".active")
+      ?.scrollIntoView({
+        inline: "center",
+        block: "nearest"
+      });
+  }
+
+  function synchronizeControls() {
+    const selected = currentSettings();
+
+    const selectedMode = MODES.find(
+      (item) => item.id === mode
+    );
+
+    elements.modeTitle.textContent =
+      selectedMode.name;
+
+    for (const name of [
+      "speed",
+      "intensity",
+      "brightness"
+    ]) {
+      elements[name].value = selected[name];
+      elements[`${name}Out`].value = selected[name];
+    }
+
+    elements.dock.classList.toggle(
+      "hidden",
+      controlsHidden
+    );
+
+    elements.showControls.classList.toggle(
+      "visible",
+      controlsHidden
+    );
+
+    renderModeSelector();
+  }
+
+  elements.themeToggle.addEventListener(
+    "click",
+    () => {
+      theme =
+        theme === "night"
+          ? "day"
+          : "night";
+
+      applyTheme();
+      savePreferences();
+    }
+  );
+
+  elements.modeStrip.addEventListener(
+    "click",
+    (event) => {
+      const button = event.target.closest(".mode");
+
+      if (!button) {
+        return;
+      }
+
+      mode = button.dataset.mode;
+
+      clearScene();
+      resetCurrentMode();
+      synchronizeControls();
+      savePreferences();
+    }
+  );
+
+  for (const name of [
+    "speed",
+    "intensity",
+    "brightness"
+  ]) {
+    elements[name].addEventListener(
+      "input",
+      () => {
+        currentSettings()[name] =
+          Number(elements[name].value);
+
+        elements[`${name}Out`].value =
+          elements[name].value;
+
+        if (
+          name === "intensity" &&
+          ["matrix", "rain", "stars", "tetris"].includes(mode)
+        ) {
+          resetCurrentMode();
+        }
+
+        savePreferences();
+      }
+    );
+  }
+
+  elements.resetControls.addEventListener(
+    "click",
+    () => {
+      const defaults = DEFAULTS[mode];
+
+      settings[mode] = {
+        speed: defaults[0],
+        intensity: defaults[1],
+        brightness: defaults[2]
+      };
+
+      clearScene();
+      resetCurrentMode();
+      synchronizeControls();
+      savePreferences();
+
+      showNotice(
+        `${MODES.find((item) => item.id === mode).name} controls reset`
+      );
+    }
+  );
+
+  elements.hideControls.addEventListener(
+    "click",
+    () => {
+      controlsHidden = true;
+      synchronizeControls();
+      savePreferences();
+    }
+  );
+
+  elements.showControls.addEventListener(
+    "click",
+    () => {
+      controlsHidden = false;
+      synchronizeControls();
+      savePreferences();
+    }
+  );
+
+  function updateClock() {
+    const now = new Date();
+
+    elements.time.textContent = now
+      .toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true
+      })
+      .replace(" AM", "")
+      .replace(" PM", "");
+
+    elements.date.textContent =
+      now.toLocaleDateString(
+        "en-US",
+        {
+          month: "short",
+          day: "numeric",
+          year: "numeric"
+        }
+      );
+  }
+
+  /* --------------------------------------------------
+     MATRIX
+  -------------------------------------------------- */
+
+  function initializeMatrix() {
+    const fontSize = clamp(
+      Math.min(width, height) / 25,
+      13,
+      25
+    );
+
+    const columnCount = Math.ceil(width / fontSize);
+
+    animationState = {
+      fontSize,
+
+      drops: Array.from(
+        { length: columnCount },
+        () => random(-height / fontSize, 0)
+      ),
+
+      characters:
+        "01アイウエオカキクケコサシスセソタチツテトナニヌネノ"
     };
   }
 
-  function setBallCount(n){
-    n = clamp(n, MIN_BALLS, MAX_BALLS);
-    while(balls.length < n) balls.push(spawnBall());
-    while(balls.length > n) balls.pop();
-    ballCountEl.textContent = n;
-    ballsMinus.disabled = (n <= MIN_BALLS);
-    ballsPlus.disabled = (n >= MAX_BALLS);
-    try{ localStorage.setItem('pongAwakeBalls', n); }catch(e){}
-  }
+  function drawMatrix(deltaTime, selected) {
+    const state = animationState;
 
-  function step(units){
-    var move = units * speedMul;
-    for(var i=0; i<balls.length; i++){
-      var b = balls[i];
-      b.x += b.vx * move;
-      b.y += b.vy * move;
-      if(b.x - ballR <= 0){ b.x = ballR; b.vx = Math.abs(b.vx); }
-      if(b.x + ballR >= W){ b.x = W - ballR; b.vx = -Math.abs(b.vx); }
-      if(b.y - ballR <= 0){ b.y = ballR; b.vy = Math.abs(b.vy); }
-      if(b.y + ballR >= H){ b.y = H - ballR; b.vy = -Math.abs(b.vy); }
+    const fade =
+      0.09 +
+      0.16 *
+      selected.speed /
+      100;
+
+    context.fillStyle = backgroundColor(fade);
+    context.fillRect(0, 0, width, height);
+
+    context.font =
+      `${state.fontSize}px ui-monospace, monospace`;
+
+    context.textAlign = "center";
+
+    const velocity =
+      (
+        0.4 +
+        selected.speed / 28
+      ) *
+      deltaTime /
+      16.67;
+
+    const density =
+      0.25 +
+      selected.intensity / 90;
+
+    for (
+      let index = 0;
+      index < state.drops.length;
+      index += 1
+    ) {
+      if (Math.random() > density) {
+        continue;
+      }
+
+      const y =
+        state.drops[index] *
+        state.fontSize;
+
+      const x =
+        index *
+        state.fontSize +
+        state.fontSize / 2;
+
+      const character =
+        state.characters[
+          Math.floor(
+            Math.random() *
+            state.characters.length
+          )
+        ];
+
+      context.fillStyle =
+        foregroundColor(
+          0.12 +
+          0.78 *
+          selected.brightness /
+          100
+        );
+
+      context.fillText(character, x, y);
+
+      if (Math.random() < 0.08) {
+        context.fillStyle =
+          foregroundColor(
+            selected.brightness / 100
+          );
+
+        context.fillText(
+          character,
+          x,
+          y - state.fontSize
+        );
+      }
+
+      state.drops[index] += velocity;
+
+      if (
+        y > height + random(20, 350) &&
+        Math.random() <
+          0.035 +
+          0.05 *
+          selected.speed /
+          100
+      ) {
+        state.drops[index] = random(-30, 0);
+      }
     }
   }
 
-  // Cheap "glow": a couple of large, low-alpha fills under the
-  // real shape instead of ctx.shadowBlur (no blur sampling at all).
-  function drawGlowCircle(x, y, r, rgb, mul){
-    ctx.fillStyle = 'rgba(' + rgb + ',' + (0.10 * mul) + ')';
-    ctx.beginPath(); ctx.arc(x, y, r * 2.6, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(' + rgb + ',' + (0.22 * mul) + ')';
-    ctx.beginPath(); ctx.arc(x, y, r * 1.6, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgb(' + rgb + ')';
-    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  /* --------------------------------------------------
+     PONG
+  -------------------------------------------------- */
+
+  function initializePong() {
+    animationState = {
+      x: width / 2,
+      y: height / 2,
+
+      velocityX: Math.max(
+        150,
+        width * 0.22
+      ),
+
+      velocityY: Math.max(
+        110,
+        height * 0.17
+      ),
+
+      paddleOne: height / 2,
+      paddleTwo: height / 2,
+      trail: []
+    };
   }
 
-  function draw(){
-    var trailAlpha = boosted ? 0.16 : 0.24;
-    var glowMul = boosted ? 1.4 : 1;
+  function drawPong(deltaTime, selected) {
+    context.fillStyle = backgroundColor(0.34);
+    context.fillRect(0, 0, width, height);
 
-    // motion-trail fade (single fillRect, cheap)
-    ctx.fillStyle = 'rgba(' + bgRGB + ',' + trailAlpha + ')';
-    ctx.fillRect(0, 0, W, H);
+    const state = animationState;
 
-    // center net (purely decorative, classic Pong reference)
-    ctx.strokeStyle = 'rgba(' + inkRGB + ',0.14)';
-    ctx.lineWidth = Math.max(1, W * 0.004);
-    ctx.setLineDash([ctx.lineWidth * 2, ctx.lineWidth * 2]);
-    ctx.beginPath();
-    ctx.moveTo(W/2, 0);
-    ctx.lineTo(W/2, H);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    const speedMultiplier =
+      0.45 +
+      selected.speed / 55;
 
-    for(var i=0; i<balls.length; i++){
-      drawGlowCircle(balls[i].x, balls[i].y, ballR, inkRGB, glowMul);
+    const seconds = deltaTime / 1000;
+
+    state.x +=
+      state.velocityX *
+      speedMultiplier *
+      seconds;
+
+    state.y +=
+      state.velocityY *
+      speedMultiplier *
+      seconds;
+
+    const paddleHeight = clamp(
+      height *
+      (
+        0.12 +
+        selected.intensity / 800
+      ),
+      48,
+      130
+    );
+
+    const paddleWidth =
+      4 +
+      6 *
+      selected.intensity /
+      100;
+
+    const margin = 18;
+
+    const targetOne =
+      state.y +
+      Math.sin(performance.now() / 500) *
+      height *
+      0.04;
+
+    const targetTwo =
+      state.y +
+      Math.cos(performance.now() / 580) *
+      height *
+      0.04;
+
+    state.paddleOne +=
+      (targetOne - state.paddleOne) *
+      clamp(
+        seconds *
+        (
+          2.5 +
+          selected.intensity / 30
+        ),
+        0,
+        1
+      );
+
+    state.paddleTwo +=
+      (targetTwo - state.paddleTwo) *
+      clamp(
+        seconds *
+        (
+          2.4 +
+          selected.intensity / 32
+        ),
+        0,
+        1
+      );
+
+    if (state.y < 9) {
+      state.y = 9;
+      state.velocityY = Math.abs(state.velocityY);
+    }
+
+    if (state.y > height - 9) {
+      state.y = height - 9;
+      state.velocityY = -Math.abs(state.velocityY);
+    }
+
+    if (
+      state.x < margin + paddleWidth + 7 &&
+      state.y > state.paddleOne - paddleHeight / 2 - 12 &&
+      state.y < state.paddleOne + paddleHeight / 2 + 12
+    ) {
+      state.x = margin + paddleWidth + 7;
+      state.velocityX = Math.abs(state.velocityX) * 1.015;
+      state.velocityY +=
+        (state.y - state.paddleOne) * 2.2;
+    }
+
+    if (
+      state.x > width - margin - paddleWidth - 7 &&
+      state.y > state.paddleTwo - paddleHeight / 2 - 12 &&
+      state.y < state.paddleTwo + paddleHeight / 2 + 12
+    ) {
+      state.x = width - margin - paddleWidth - 7;
+      state.velocityX = -Math.abs(state.velocityX) * 1.015;
+      state.velocityY +=
+        (state.y - state.paddleTwo) * 2.2;
+    }
+
+    if (
+      state.x < -20 ||
+      state.x > width + 20
+    ) {
+      state.x = width / 2;
+      state.y = height / 2;
+
+      state.velocityX =
+        (Math.random() < 0.5 ? -1 : 1) *
+        Math.max(150, width * 0.22);
+
+      state.velocityY = random(-180, 180);
+    }
+
+    state.velocityY = clamp(
+      state.velocityY,
+      -height * 0.7,
+      height * 0.7
+    );
+
+    state.trail.push([state.x, state.y]);
+
+    const maximumTrailLength =
+      5 +
+      Math.floor(selected.intensity / 10);
+
+    if (state.trail.length > maximumTrailLength) {
+      state.trail.shift();
+    }
+
+    context.strokeStyle =
+      foregroundColor(
+        0.15 *
+        selected.brightness /
+        100
+      );
+
+    context.setLineDash([5, 10]);
+    context.beginPath();
+    context.moveTo(width / 2, 0);
+    context.lineTo(width / 2, height);
+    context.stroke();
+    context.setLineDash([]);
+
+    context.fillStyle =
+      foregroundColor(
+        0.25 +
+        0.7 *
+        selected.brightness /
+        100
+      );
+
+    context.fillRect(
+      margin,
+      state.paddleOne - paddleHeight / 2,
+      paddleWidth,
+      paddleHeight
+    );
+
+    context.fillRect(
+      width - margin - paddleWidth,
+      state.paddleTwo - paddleHeight / 2,
+      paddleWidth,
+      paddleHeight
+    );
+
+    state.trail.forEach((point, index) => {
+      context.globalAlpha =
+        (index + 1) /
+        state.trail.length *
+        0.25;
+
+      context.beginPath();
+
+      context.arc(
+        point[0],
+        point[1],
+        5 +
+        index /
+        state.trail.length *
+        3,
+        0,
+        Math.PI * 2
+      );
+
+      context.fill();
+    });
+
+    context.globalAlpha = 1;
+
+    context.beginPath();
+
+    context.arc(
+      state.x,
+      state.y,
+      5 +
+      5 *
+      selected.intensity /
+      100,
+      0,
+      Math.PI * 2
+    );
+
+    context.fill();
+  }
+
+  /* --------------------------------------------------
+     RAIN
+  -------------------------------------------------- */
+
+  function createRainDrop(anywhere = false) {
+    const depth = random(0.25, 1);
+
+    return {
+      x: random(0, width),
+
+      y: anywhere
+        ? random(-height, height)
+        : random(-height * 0.3, 0),
+
+      depth,
+
+      length:
+        random(10, 42) *
+        depth,
+
+      velocity:
+        random(320, 920) *
+        depth
+    };
+  }
+
+  function initializeRain() {
+    const count = Math.floor(
+      60 +
+      Math.min(
+        width * height / 5000,
+        190
+      ) *
+      (
+        currentSettings().intensity /
+        100
+      )
+    );
+
+    animationState = {
+      drops: Array.from(
+        { length: count },
+        () => createRainDrop(true)
+      )
+    };
+  }
+
+  function drawRain(deltaTime, selected) {
+    context.fillStyle = backgroundColor(0.28);
+    context.fillRect(0, 0, width, height);
+
+    context.lineWidth = 1;
+
+    const wind =
+      Math.sin(performance.now() / 2400) *
+      (
+        0.5 +
+        selected.intensity / 22
+      );
+
+    for (const drop of animationState.drops) {
+      drop.y +=
+        drop.velocity *
+        (
+          0.35 +
+          selected.speed / 75
+        ) *
+        deltaTime /
+        1000;
+
+      drop.x +=
+        wind *
+        drop.depth *
+        deltaTime /
+        16.7;
+
+      if (
+        drop.y > height + 50 ||
+        drop.x > width + 30 ||
+        drop.x < -30
+      ) {
+        Object.assign(
+          drop,
+          createRainDrop(false)
+        );
+      }
+
+      context.strokeStyle =
+        foregroundColor(
+          (
+            0.12 +
+            drop.depth *
+            0.55
+          ) *
+          selected.brightness /
+          100
+        );
+
+      context.beginPath();
+      context.moveTo(drop.x, drop.y);
+
+      context.lineTo(
+        drop.x -
+        wind *
+        drop.length /
+        12,
+
+        drop.y -
+        drop.length *
+        (
+          1 +
+          selected.speed / 180
+        )
+      );
+
+      context.stroke();
     }
   }
 
-  var lastT = null;
-  var acc = 0;
-  var FRAME_MS = 1000 / 30; // ~30fps render cap
-  var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  /* --------------------------------------------------
+     WIREFRAME
+  -------------------------------------------------- */
 
-  function frame(t){
-    if(lastT === null) lastT = t;
-    var dt = t - lastT;
-    lastT = t;
-    acc += dt;
+  function initializeWireframe() {
+    animationState = {
+      time: 0
+    };
+  }
 
-    if(acc >= FRAME_MS){
-      var elapsed = Math.min(acc, 100); // clamp big jumps (e.g. tab was hidden)
-      if(!reducedMotion) step(elapsed * 0.06);
-      draw();
-      acc = 0;
+  function drawWireframe(deltaTime, selected) {
+    context.fillStyle = backgroundColor(0.25);
+    context.fillRect(0, 0, width, height);
+
+    animationState.time +=
+      deltaTime *
+      (
+        0.00015 +
+        selected.speed *
+        0.000012
+      );
+
+    const horizon = height * 0.43;
+
+    const rowCount =
+      15 +
+      Math.floor(selected.intensity / 5);
+
+    const columnCount =
+      14 +
+      Math.floor(selected.intensity / 6);
+
+    context.lineWidth =
+      0.7 +
+      selected.brightness /
+      180;
+
+    context.strokeStyle =
+      foregroundColor(
+        0.12 +
+        0.48 *
+        selected.brightness /
+        100
+      );
+
+    function projectY(depth) {
+      return (
+        horizon +
+        (height - horizon) *
+        Math.pow(depth, 1.7)
+      );
     }
-    requestAnimationFrame(frame);
-  }
 
-  var resizeTimer = null;
-  window.addEventListener('resize', function(){
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(function(){
-      DPR = Math.min(window.devicePixelRatio || 1, 2);
-      resize();
-    }, 100);
-  });
+    for (
+      let row = 0;
+      row <= rowCount;
+      row += 1
+    ) {
+      const depth =
+        (
+          row / rowCount +
+          animationState.time
+        ) %
+        1;
 
-  // ---- ball count controls ----
-  var ballCountEl = document.getElementById('ballCount');
-  var ballsMinus = document.getElementById('ballsMinus');
-  var ballsPlus = document.getElementById('ballsPlus');
+      const baseY = projectY(depth);
 
-  ballsMinus.addEventListener('click', function(){ setBallCount(balls.length - 1); });
-  ballsPlus.addEventListener('click', function(){ setBallCount(balls.length + 1); });
+      context.globalAlpha =
+        0.15 +
+        0.85 *
+        depth;
 
-  // ---- speed control ----
-  var speedSlider = document.getElementById('speedSlider');
-  var speedValueEl = document.getElementById('speedValue');
+      context.beginPath();
 
-  function setSpeed(val){
-    speedMul = clamp(val, parseFloat(speedSlider.min), parseFloat(speedSlider.max));
-    speedValueEl.textContent = speedMul.toFixed(1) + '\u00D7';
-    speedSlider.value = speedMul;
-    try{ localStorage.setItem('pongAwakeSpeed', speedMul); }catch(e){}
-  }
+      for (
+        let column = 0;
+        column <= columnCount;
+        column += 1
+      ) {
+        const normalizedX =
+          column / columnCount;
 
-  speedSlider.addEventListener('input', function(){
-    setSpeed(parseFloat(speedSlider.value));
-  });
+        const worldX =
+          (normalizedX - 0.5) * 2;
 
-  // ---- init ----
-  resize();
+        const wave =
+          Math.sin(
+            normalizedX * 8 +
+            animationState.time * 10
+          ) *
+          Math.sin(
+            depth * 5 +
+            animationState.time * 4
+          ) *
+          height *
+          0.018 *
+          (
+            selected.intensity / 100
+          );
 
-  var savedBalls = 1;
-  try{
-    var sb = parseInt(localStorage.getItem('pongAwakeBalls'), 10);
-    if(!isNaN(sb)) savedBalls = sb;
-  }catch(e){}
-  setBallCount(savedBalls);
+        const x =
+          width / 2 +
+          worldX *
+          width *
+          (
+            0.08 +
+            0.52 *
+            depth
+          );
 
-  var savedSpeed = 1;
-  try{
-    var ss = parseFloat(localStorage.getItem('pongAwakeSpeed'));
-    if(!isNaN(ss)) savedSpeed = ss;
-  }catch(e){}
-  setSpeed(savedSpeed);
+        const y =
+          baseY +
+          wave *
+          depth;
 
-  ctx.fillStyle = 'rgb(' + bgRGB + ')';
-  ctx.fillRect(0, 0, W, H);
-  requestAnimationFrame(frame);
+        if (column === 0) {
+          context.moveTo(x, y);
+        } else {
+          context.lineTo(x, y);
+        }
+      }
 
-  // ============================================================
-  //  CLOCK — real 7-segment LED digits built from <i> elements
-  // ============================================================
-  var SEGMENTS = {
-    '0':'abcdef', '1':'bc',    '2':'abged', '3':'abgcd', '4':'fgbc',
-    '5':'afgcd',  '6':'afgecd','7':'abc',   '8':'abcdefg','9':'abcdfg'
-  };
-  var SEG_NAMES = ['a','b','c','d','e','f','g'];
-
-  function makeDigit(){
-    var d = document.createElement('div');
-    d.className = 'digit';
-    for(var i=0; i<SEG_NAMES.length; i++){
-      var s = document.createElement('i');
-      s.className = 'seg seg-' + SEG_NAMES[i];
-      d.appendChild(s);
+      context.stroke();
     }
-    return d;
+
+    context.globalAlpha = 1;
+
+    for (
+      let column = 0;
+      column <= columnCount;
+      column += 1
+    ) {
+      const normalizedX =
+        column / columnCount;
+
+      const worldX =
+        (normalizedX - 0.5) * 2;
+
+      context.beginPath();
+
+      for (
+        let row = 0;
+        row <= rowCount;
+        row += 1
+      ) {
+        const depth = row / rowCount;
+        const y = projectY(depth);
+
+        const x =
+          width / 2 +
+          worldX *
+          width *
+          (
+            0.08 +
+            0.52 *
+            depth
+          );
+
+        if (row === 0) {
+          context.moveTo(x, y);
+        } else {
+          context.lineTo(x, y);
+        }
+      }
+
+      context.stroke();
+    }
+
+    context.globalAlpha = 1;
   }
 
-  function setDigit(el, ch){
-    var segs = SEGMENTS[ch] || '';
-    for(var i=0; i<SEG_NAMES.length; i++){
-      var name = SEG_NAMES[i];
-      var s = el.querySelector('.seg-' + name);
-      if(segs.indexOf(name) > -1) s.classList.add('on');
-      else s.classList.remove('on');
+  /* --------------------------------------------------
+     STARFIELD
+  -------------------------------------------------- */
+
+  function createStar(anywhere = false) {
+    return {
+      x: random(-width, width),
+      y: random(-height, height),
+
+      z: anywhere
+        ? random(1, width)
+        : width,
+
+      previousZ: width
+    };
+  }
+
+  function initializeStars() {
+    const count = Math.floor(
+      80 +
+      currentSettings().intensity *
+      2.3
+    );
+
+    animationState = {
+      stars: Array.from(
+        { length: count },
+        () => createStar(true)
+      )
+    };
+  }
+
+  function drawStars(deltaTime, selected) {
+    context.fillStyle = backgroundColor(0.42);
+    context.fillRect(0, 0, width, height);
+
+    const centerX = width / 2;
+    const centerY = height / 2;
+
+    const movement =
+      (
+        45 +
+        selected.speed * 6
+      ) *
+      deltaTime /
+      1000;
+
+    context.lineCap = "round";
+
+    for (const star of animationState.stars) {
+      star.previousZ = star.z;
+      star.z -= movement;
+
+      if (star.z < 1) {
+        Object.assign(
+          star,
+          createStar(false)
+        );
+      }
+
+      const screenX =
+        centerX +
+        star.x /
+        star.z *
+        width *
+        0.45;
+
+      const screenY =
+        centerY +
+        star.y /
+        star.z *
+        height *
+        0.45;
+
+      const previousX =
+        centerX +
+        star.x /
+        star.previousZ *
+        width *
+        0.45;
+
+      const previousY =
+        centerY +
+        star.y /
+        star.previousZ *
+        height *
+        0.45;
+
+      if (
+        screenX < 0 ||
+        screenX > width ||
+        screenY < 0 ||
+        screenY > height
+      ) {
+        Object.assign(
+          star,
+          createStar(false)
+        );
+
+        continue;
+      }
+
+      const size = clamp(
+        (
+          1 -
+          star.z / width
+        ) *
+        3.2,
+        0.4,
+        3.2
+      );
+
+      context.strokeStyle =
+        foregroundColor(
+          clamp(
+            (
+              1 -
+              star.z / width
+            ) *
+            selected.brightness /
+            75,
+            0.08,
+            1
+          )
+        );
+
+      context.lineWidth =
+        size *
+        (
+          0.45 +
+          selected.intensity / 120
+        );
+
+      context.beginPath();
+      context.moveTo(previousX, previousY);
+      context.lineTo(screenX, screenY);
+      context.stroke();
     }
   }
 
-  var hhEl = document.getElementById('hh');
-  var mmEl = document.getElementById('mm');
-  var digits = {
-    h1: makeDigit(), h2: makeDigit(),
-    m1: makeDigit(), m2: makeDigit()
-  };
-  hhEl.appendChild(digits.h1); hhEl.appendChild(digits.h2);
-  mmEl.appendChild(digits.m1); mmEl.appendChild(digits.m2);
+  /* --------------------------------------------------
+     TETRIS
+  -------------------------------------------------- */
 
-  var ampmEl = document.getElementById('ampm');
-  var dateEl = document.getElementById('date');
-
-  function pad(n){ return n < 10 ? '0' + n : '' + n; }
-  function pad3(n){ return n < 10 ? '00' + n : (n < 100 ? '0' + n : '' + n); }
-
-  function isLeapYear(y){
-    return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  function createTetrisBoard(columns, rows) {
+    return Array.from(
+      { length: rows },
+      () => Array(columns).fill(0)
+    );
   }
 
-  // ISO-8601 week number (weeks start Monday, week 1 contains the first Thursday)
-  function isoWeek(d){
-    var date = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    var day = date.getDay() || 7; // Mon=1 .. Sun=7
-    date.setDate(date.getDate() + 4 - day);
-    var yearStart = new Date(date.getFullYear(), 0, 1);
-    return Math.ceil(((date - yearStart) / 86400000 + 1) / 7);
+  function cloneMatrix(matrix) {
+    return matrix.map((row) => [...row]);
   }
 
-  function dayOfYear(d){
-    var start = new Date(d.getFullYear(), 0, 0);
-    return Math.floor((d - start) / 86400000);
+  function rotateMatrix(matrix) {
+    const rowCount = matrix.length;
+    const columnCount = matrix[0].length;
+
+    const rotated = Array.from(
+      { length: columnCount },
+      () => Array(rowCount).fill(0)
+    );
+
+    for (let y = 0; y < rowCount; y += 1) {
+      for (let x = 0; x < columnCount; x += 1) {
+        rotated[x][rowCount - 1 - y] =
+          matrix[y][x];
+      }
+    }
+
+    return rotated;
   }
 
-  function tick(){
-    var now = new Date();
-    var h = now.getHours();
-    var m = now.getMinutes();
-    var ampm = h >= 12 ? 'PM' : 'AM';
-    var h12 = h % 12; if(h12 === 0) h12 = 12;
-    var hStr = pad(h12), mStr = pad(m);
+  function createTetrisPiece(columns) {
+    const shape = cloneMatrix(
+      TETRIS_SHAPES[
+        Math.floor(
+          Math.random() *
+          TETRIS_SHAPES.length
+        )
+      ]
+    );
 
-    setDigit(digits.h1, hStr[0]);
-    setDigit(digits.h2, hStr[1]);
-    setDigit(digits.m1, mStr[0]);
-    setDigit(digits.m2, mStr[1]);
-    ampmEl.textContent = ampm;
-
-    var yy = pad(now.getFullYear() % 100);
-    var mo = pad(now.getMonth() + 1);
-    var dd = pad(now.getDate());
-    var wk = pad(isoWeek(now));
-    var doy = pad3(dayOfYear(now));
-    var totalDays = isLeapYear(now.getFullYear()) ? 366 : 365;
-
-    dateEl.textContent = yy + '.' + mo + '.' + dd + ' \u00B7 WK' + wk + ' \u00B7 D' + doy + '/' + totalDays;
+    return {
+      shape,
+      x: Math.floor(
+        (columns - shape[0].length) / 2
+      ),
+      y: -shape.length,
+      value:
+        1 +
+        Math.floor(Math.random() * 7)
+    };
   }
-  tick();
-  setInterval(tick, 1000);
 
-  // ============================================================
-  //  WAKE LOCK
-  //  Modern Safari (iOS 16.4+) supports navigator.wakeLock natively.
-  //  No video/audio hacks needed.
-  // ============================================================
-  var btn = document.getElementById('activateBtn');
-  var statusEl = document.getElementById('status');
-  var supported = 'wakeLock' in navigator;
+  function initializeTetris() {
+    const columns =
+      width > height
+        ? 14
+        : 10;
 
-  var wakeLock = null;
-  var isActive = false;
+    const rows =
+      width > height
+        ? 12
+        : 20;
 
-  function setUI(active){
-    if(active){
-      btn.classList.add('active');
-      statusEl.textContent = 'SCREEN AWAKE — TAP TO SLEEP';
-      statusEl.classList.add('on');
-      document.body.classList.add('boosted');
-      boosted = true;
-    } else {
-      btn.classList.remove('active');
-      statusEl.textContent = supported ? 'TAP TO STAY AWAKE' : 'WAKE LOCK NOT SUPPORTED';
-      statusEl.classList.remove('on');
-      document.body.classList.remove('boosted');
-      boosted = false;
+    animationState = {
+      columns,
+      rows,
+      board: createTetrisBoard(columns, rows),
+      piece: null,
+      elapsed: 0,
+      nextDecision: 0,
+      lines: 0,
+      pulse: 0
+    };
+
+    spawnTetrisPiece();
+  }
+
+  function spawnTetrisPiece() {
+    const state = animationState;
+
+    state.piece = createTetrisPiece(
+      state.columns
+    );
+
+    state.nextDecision = random(80, 260);
+
+    if (
+      tetrisCollision(
+        state.board,
+        state.piece,
+        0,
+        0
+      )
+    ) {
+      state.board = createTetrisBoard(
+        state.columns,
+        state.rows
+      );
+
+      state.lines = 0;
+      state.pulse = 1;
+
+      state.piece = createTetrisPiece(
+        state.columns
+      );
     }
   }
 
-  async function acquireWakeLock(){
-    if(!supported) return;
-    try{
-      wakeLock = await navigator.wakeLock.request('screen');
-      wakeLock.addEventListener('release', function(){
+  function tetrisCollision(
+    board,
+    piece,
+    offsetX = 0,
+    offsetY = 0,
+    testShape = piece.shape
+  ) {
+    for (
+      let y = 0;
+      y < testShape.length;
+      y += 1
+    ) {
+      for (
+        let x = 0;
+        x < testShape[y].length;
+        x += 1
+      ) {
+        if (!testShape[y][x]) {
+          continue;
+        }
+
+        const boardX =
+          piece.x +
+          x +
+          offsetX;
+
+        const boardY =
+          piece.y +
+          y +
+          offsetY;
+
+        if (
+          boardX < 0 ||
+          boardX >= board[0].length ||
+          boardY >= board.length
+        ) {
+          return true;
+        }
+
+        if (
+          boardY >= 0 &&
+          board[boardY][boardX]
+        ) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  function lockTetrisPiece() {
+    const state = animationState;
+    const piece = state.piece;
+
+    for (
+      let y = 0;
+      y < piece.shape.length;
+      y += 1
+    ) {
+      for (
+        let x = 0;
+        x < piece.shape[y].length;
+        x += 1
+      ) {
+        if (!piece.shape[y][x]) {
+          continue;
+        }
+
+        const boardX = piece.x + x;
+        const boardY = piece.y + y;
+
+        if (
+          boardY >= 0 &&
+          boardY < state.rows &&
+          boardX >= 0 &&
+          boardX < state.columns
+        ) {
+          state.board[boardY][boardX] =
+            piece.value;
+        }
+      }
+    }
+
+    clearTetrisLines();
+    spawnTetrisPiece();
+  }
+
+  function clearTetrisLines() {
+    const state = animationState;
+
+    let cleared = 0;
+
+    for (
+      let y = state.rows - 1;
+      y >= 0;
+      y -= 1
+    ) {
+      if (
+        state.board[y].every(
+          (cell) => cell !== 0
+        )
+      ) {
+        state.board.splice(y, 1);
+
+        state.board.unshift(
+          Array(state.columns).fill(0)
+        );
+
+        cleared += 1;
+        y += 1;
+      }
+    }
+
+    if (cleared > 0) {
+      state.lines += cleared;
+      state.pulse = 1;
+    }
+  }
+
+  function moveTetrisPiece(direction) {
+    const state = animationState;
+
+    if (
+      !tetrisCollision(
+        state.board,
+        state.piece,
+        direction,
+        0
+      )
+    ) {
+      state.piece.x += direction;
+    }
+  }
+
+  function rotateTetrisPiece() {
+    const state = animationState;
+
+    const rotated = rotateMatrix(
+      state.piece.shape
+    );
+
+    const kicks = [0, -1, 1, -2, 2];
+
+    for (const kick of kicks) {
+      if (
+        !tetrisCollision(
+          state.board,
+          state.piece,
+          kick,
+          0,
+          rotated
+        )
+      ) {
+        state.piece.shape = rotated;
+        state.piece.x += kick;
+        return;
+      }
+    }
+  }
+
+  function tetrisAutoplay(deltaTime, selected) {
+    const state = animationState;
+
+    state.nextDecision -= deltaTime;
+
+    if (state.nextDecision <= 0) {
+      state.nextDecision = random(
+        90,
+        300 -
+        selected.intensity * 1.4
+      );
+
+      const action = Math.random();
+
+      if (action < 0.24) {
+        moveTetrisPiece(-1);
+      } else if (action < 0.48) {
+        moveTetrisPiece(1);
+      } else if (action < 0.67) {
+        rotateTetrisPiece();
+      }
+    }
+
+    const dropInterval =
+      850 -
+      selected.speed * 6.6;
+
+    state.elapsed += deltaTime;
+
+    if (
+      state.elapsed >=
+      Math.max(120, dropInterval)
+    ) {
+      state.elapsed = 0;
+
+      if (
+        !tetrisCollision(
+          state.board,
+          state.piece,
+          0,
+          1
+        )
+      ) {
+        state.piece.y += 1;
+      } else {
+        lockTetrisPiece();
+      }
+    }
+  }
+
+  function tetrisBlockAlpha(
+    value,
+    selected
+  ) {
+    const variations = [
+      0,
+      0.54,
+      0.68,
+      0.8,
+      0.92,
+      0.63,
+      0.75,
+      1
+    ];
+
+    return clamp(
+      variations[value] *
+      selected.brightness /
+      100,
+      0.15,
+      1
+    );
+  }
+
+  function drawTetrisBlock(
+    x,
+    y,
+    size,
+    value,
+    selected,
+    active = false
+  ) {
+    const gap = Math.max(1, size * 0.08);
+
+    const alpha = tetrisBlockAlpha(
+      value,
+      selected
+    );
+
+    context.fillStyle =
+      foregroundColor(
+        active
+          ? Math.min(1, alpha + 0.12)
+          : alpha
+      );
+
+    context.fillRect(
+      x + gap,
+      y + gap,
+      size - gap * 2,
+      size - gap * 2
+    );
+
+    context.strokeStyle =
+      foregroundColor(
+        active
+          ? 0.88
+          : 0.28
+      );
+
+    context.lineWidth =
+      Math.max(0.7, size * 0.035);
+
+    context.strokeRect(
+      x + gap,
+      y + gap,
+      size - gap * 2,
+      size - gap * 2
+    );
+
+    context.fillStyle =
+      isDayMode()
+        ? `rgba(255,255,255,${active ? 0.3 : 0.16})`
+        : `rgba(255,255,255,${active ? 0.2 : 0.1})`;
+
+    context.fillRect(
+      x + gap * 1.8,
+      y + gap * 1.8,
+      size - gap * 3.6,
+      Math.max(1, size * 0.07)
+    );
+  }
+
+  function drawTetris(deltaTime, selected) {
+    const state = animationState;
+
+    tetrisAutoplay(deltaTime, selected);
+
+    context.fillStyle = backgroundColor(0.26);
+    context.fillRect(0, 0, width, height);
+
+    state.pulse = Math.max(
+      0,
+      state.pulse -
+      deltaTime / 420
+    );
+
+    const availableWidth =
+      width *
+      (
+        0.48 +
+        selected.intensity *
+        0.0032
+      );
+
+    const availableHeight =
+      height *
+      (
+        width > height
+          ? 0.72
+          : 0.82
+      );
+
+    const cellSize = Math.max(
+      7,
+      Math.min(
+        availableWidth / state.columns,
+        availableHeight / state.rows
+      )
+    );
+
+    const boardWidth =
+      cellSize *
+      state.columns;
+
+    const boardHeight =
+      cellSize *
+      state.rows;
+
+    const originX =
+      width / 2 -
+      boardWidth / 2;
+
+    const originY =
+      height / 2 -
+      boardHeight / 2;
+
+    context.fillStyle =
+      foregroundColor(
+        0.018 +
+        state.pulse * 0.07
+      );
+
+    context.fillRect(
+      originX,
+      originY,
+      boardWidth,
+      boardHeight
+    );
+
+    context.strokeStyle =
+      foregroundColor(
+        0.15 +
+        state.pulse * 0.35
+      );
+
+    context.lineWidth = 1;
+
+    context.strokeRect(
+      originX,
+      originY,
+      boardWidth,
+      boardHeight
+    );
+
+    /*
+      Subtle board grid.
+    */
+    context.strokeStyle =
+      foregroundColor(
+        0.025 +
+        selected.intensity /
+        3500
+      );
+
+    context.lineWidth = 0.5;
+
+    for (
+      let x = 1;
+      x < state.columns;
+      x += 1
+    ) {
+      const drawX =
+        originX +
+        x *
+        cellSize;
+
+      context.beginPath();
+      context.moveTo(drawX, originY);
+      context.lineTo(
+        drawX,
+        originY + boardHeight
+      );
+      context.stroke();
+    }
+
+    for (
+      let y = 1;
+      y < state.rows;
+      y += 1
+    ) {
+      const drawY =
+        originY +
+        y *
+        cellSize;
+
+      context.beginPath();
+      context.moveTo(originX, drawY);
+      context.lineTo(
+        originX + boardWidth,
+        drawY
+      );
+      context.stroke();
+    }
+
+    /*
+      Locked blocks.
+    */
+    for (
+      let y = 0;
+      y < state.rows;
+      y += 1
+    ) {
+      for (
+        let x = 0;
+        x < state.columns;
+        x += 1
+      ) {
+        const value = state.board[y][x];
+
+        if (!value) {
+          continue;
+        }
+
+        drawTetrisBlock(
+          originX + x * cellSize,
+          originY + y * cellSize,
+          cellSize,
+          value,
+          selected,
+          false
+        );
+      }
+    }
+
+    /*
+      Ghost piece.
+    */
+    let ghostOffset = 0;
+
+    while (
+      !tetrisCollision(
+        state.board,
+        state.piece,
+        0,
+        ghostOffset + 1
+      )
+    ) {
+      ghostOffset += 1;
+    }
+
+    for (
+      let y = 0;
+      y < state.piece.shape.length;
+      y += 1
+    ) {
+      for (
+        let x = 0;
+        x < state.piece.shape[y].length;
+        x += 1
+      ) {
+        if (!state.piece.shape[y][x]) {
+          continue;
+        }
+
+        const boardX =
+          state.piece.x + x;
+
+        const boardY =
+          state.piece.y +
+          y +
+          ghostOffset;
+
+        if (boardY < 0) {
+          continue;
+        }
+
+        context.strokeStyle =
+          foregroundColor(0.15);
+
+        context.lineWidth = 1;
+
+        context.strokeRect(
+          originX +
+          boardX *
+          cellSize +
+          cellSize *
+          0.16,
+
+          originY +
+          boardY *
+          cellSize +
+          cellSize *
+          0.16,
+
+          cellSize * 0.68,
+          cellSize * 0.68
+        );
+      }
+    }
+
+    /*
+      Falling piece.
+    */
+    for (
+      let y = 0;
+      y < state.piece.shape.length;
+      y += 1
+    ) {
+      for (
+        let x = 0;
+        x < state.piece.shape[y].length;
+        x += 1
+      ) {
+        if (!state.piece.shape[y][x]) {
+          continue;
+        }
+
+        const boardX =
+          state.piece.x + x;
+
+        const boardY =
+          state.piece.y + y;
+
+        if (boardY < 0) {
+          continue;
+        }
+
+        drawTetrisBlock(
+          originX +
+          boardX *
+          cellSize,
+
+          originY +
+          boardY *
+          cellSize,
+
+          cellSize,
+          state.piece.value,
+          selected,
+          true
+        );
+      }
+    }
+  }
+
+  /* --------------------------------------------------
+     ANIMATION LOOP
+  -------------------------------------------------- */
+
+  function drawFrame(timestamp) {
+    const deltaTime = clamp(
+      timestamp - previousFrameTime,
+      0,
+      50
+    );
+
+    previousFrameTime = timestamp;
+
+    const selected = currentSettings();
+
+    switch (mode) {
+      case "matrix":
+        drawMatrix(deltaTime, selected);
+        break;
+
+      case "pong":
+        drawPong(deltaTime, selected);
+        break;
+
+      case "rain":
+        drawRain(deltaTime, selected);
+        break;
+
+      case "wire":
+        drawWireframe(deltaTime, selected);
+        break;
+
+      case "stars":
+        drawStars(deltaTime, selected);
+        break;
+
+      case "tetris":
+        drawTetris(deltaTime, selected);
+        break;
+    }
+
+    requestAnimationFrame(drawFrame);
+  }
+
+  /* --------------------------------------------------
+     WAKE LOCK AND FULLSCREEN
+  -------------------------------------------------- */
+
+  async function requestWakeLock() {
+    if (!("wakeLock" in navigator)) {
+      setStatus(
+        "Wake lock unsupported",
+        "error"
+      );
+
+      showNotice(
+        "This browser does not expose Screen Wake Lock. Animations will continue."
+      );
+
+      return false;
+    }
+
+    try {
+      wakeLock =
+        await navigator.wakeLock.request(
+          "screen"
+        );
+
+      wakeLock.addEventListener(
+        "release",
+        () => {
+          wakeLock = null;
+
+          if (
+            wakeLockWanted &&
+            document.visibilityState === "visible"
+          ) {
+            setStatus(
+              "Wake lock released",
+              "error"
+            );
+          } else {
+            updateActiveInterface();
+          }
+        }
+      );
+
+      return true;
+    } catch (error) {
+      setStatus(
+        "Wake lock failed",
+        "error"
+      );
+
+      showNotice(
+        "Wake lock could not start: " +
+        (
+          error?.message ||
+          error?.name ||
+          "request rejected"
+        )
+      );
+
+      return false;
+    }
+  }
+
+  async function enterFullscreen() {
+    const root = document.documentElement;
+
+    try {
+      if (document.fullscreenElement) {
+        return true;
+      }
+
+      if (root.requestFullscreen) {
+        await root.requestFullscreen({
+          navigationUI: "hide"
+        });
+
+        return Boolean(
+          document.fullscreenElement
+        );
+      }
+
+      if (root.webkitRequestFullscreen) {
+        root.webkitRequestFullscreen();
+        return true;
+      }
+
+      showNotice(
+        "Fullscreen is unavailable. The app will still fill the browser viewport."
+      );
+
+      return false;
+    } catch {
+      showNotice(
+        "Fullscreen was blocked. Wake mode can still run."
+      );
+
+      return false;
+    }
+  }
+
+  async function exitFullscreen() {
+    try {
+      if (
+        document.fullscreenElement &&
+        document.exitFullscreen
+      ) {
+        await document.exitFullscreen();
+      } else if (
+        document.webkitFullscreenElement &&
+        document.webkitExitFullscreen
+      ) {
+        document.webkitExitFullscreen();
+      }
+    } catch {
+      // Fullscreen cleanup failure is not fatal.
+    }
+  }
+
+  function updateActiveInterface() {
+    const wakeLockHeld =
+      Boolean(wakeLock) &&
+      !wakeLock.released;
+
+    elements.power.classList.toggle(
+      "active",
+      wakeLockWanted &&
+      wakeLockHeld
+    );
+
+    elements.power.setAttribute(
+      "aria-label",
+      wakeLockWanted
+        ? "Deactivate wake lock"
+        : "Activate wake lock"
+    );
+
+    if (
+      wakeLockWanted &&
+      wakeLockHeld
+    ) {
+      setStatus(
+        document.fullscreenElement
+          ? "Awake · Fullscreen"
+          : "Awake · Viewport",
+        "active"
+      );
+    } else if (!wakeLockWanted) {
+      setStatus("Ready · Tap power");
+    }
+  }
+
+  elements.power.addEventListener(
+    "click",
+    async () => {
+      if (wakeLockWanted) {
+        wakeLockWanted = false;
+
+        if (wakeLock) {
+          try {
+            await wakeLock.release();
+          } catch {
+            // Continue deactivation.
+          }
+        }
+
         wakeLock = null;
-      });
-    }catch(e){
-      wakeLock = null;
-    }
-  }
 
-  function releaseWakeLock(){
-    if(wakeLock){
-      try{ wakeLock.release(); }catch(e){}
-      wakeLock = null;
-    }
-  }
+        await exitFullscreen();
+        updateActiveInterface();
 
-  btn.addEventListener('click', function(){
-    isActive = !isActive;
-    setUI(isActive);
-    if(isActive){
-      acquireWakeLock();
-    } else {
-      releaseWakeLock();
+        return;
+      }
+
+      wakeLockWanted = true;
+      setStatus("Activating…");
+
+      const [wakeLockSucceeded] =
+        await Promise.all([
+          requestWakeLock(),
+          enterFullscreen()
+        ]);
+
+      if (!wakeLockSucceeded) {
+        wakeLockWanted = false;
+      }
+
+      updateActiveInterface();
     }
+  );
+
+  document.addEventListener(
+    "visibilitychange",
+    async () => {
+      if (
+        document.visibilityState === "visible" &&
+        wakeLockWanted &&
+        !wakeLock
+      ) {
+        await requestWakeLock();
+        updateActiveInterface();
+      }
+    }
+  );
+
+  document.addEventListener(
+    "fullscreenchange",
+    updateActiveInterface
+  );
+
+  window.addEventListener(
+    "resize",
+    resizeCanvas,
+    {
+      passive: true
+    }
+  );
+
+  window.addEventListener(
+    "orientationchange",
+    () => {
+      setTimeout(resizeCanvas, 180);
+    },
+    {
+      passive: true
+    }
+  );
+
+  applyTheme();
+  updateClock();
+  synchronizeControls();
+  resizeCanvas();
+
+  setInterval(updateClock, 1000);
+
+  requestAnimationFrame((timestamp) => {
+    previousFrameTime = timestamp;
+    requestAnimationFrame(drawFrame);
   });
-
-  document.addEventListener('visibilitychange', function(){
-    if(document.visibilityState === 'visible' && isActive && !wakeLock){
-      acquireWakeLock();
-    }
-  });
-
-  if(!supported){
-    statusEl.textContent = 'WAKE LOCK NOT SUPPORTED';
-  }
-
 })();
 </script>
 </body>
