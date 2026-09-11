@@ -200,8 +200,8 @@ input[type=range]::-webkit-slider-thumb{
 }
 
 #alarm{
-  width:42px;
-  height:42px;
+  width:32px;
+  height:32px;
   border:1px solid #f6c945;
   border-radius:50%;
   background:#f6c945;
@@ -212,8 +212,8 @@ input[type=range]::-webkit-slider-thumb{
   transition:.18s ease;
 }
 #alarm svg{
-  width:20px;
-  height:20px;
+  width:14px;
+  height:14px;
   fill:none;
   stroke:currentColor;
   stroke-width:1.8;
@@ -221,7 +221,10 @@ input[type=range]::-webkit-slider-thumb{
   stroke-linejoin:round;
 }
 #alarm.active{
-  box-shadow:0 0 0 5px #f6c94526,0 0 28px #f6c94566;
+  border-color:#56e47b;
+  background:#56e47b;
+  color:#06170b;
+  box-shadow:0 0 0 5px #56e47b2b,0 0 30px #56e47b7a;
   transform:scale(1.04);
 }
 
@@ -306,6 +309,14 @@ input[type=range]::-webkit-slider-thumb{
   #power{
     width:52px;
     height:52px;
+  }
+  #alarm{
+    width:26px;
+    height:26px;
+  }
+  #alarm svg{
+    width:12px;
+    height:12px;
   }
   #alarm{
     width:38px;
