@@ -867,7 +867,9 @@ input[type=range]::-webkit-slider-thumb{
     note(text, duration);
     try{
       if("speechSynthesis" in window){
-        speechSynthesis.cancel();
+        // Do not cancel here. iPhone may deliver timers a little late, and cancel()
+        // could erase a sitting reminder when a :00/:30 announcement lands nearby.
+        // Let Web Speech queue the utterances in order instead.
         const utterance = new SpeechSynthesisUtterance(text);
         applyVoice(utterance);
         utterance.rate = 0.95;
@@ -877,18 +879,9 @@ input[type=range]::-webkit-slider-thumb{
     }catch{}
   }
 
-  function nearHalfHourBoundary(date=new Date(), windowMs=15000){
-    const minute = date.getMinutes();
-    const secondMs = date.getSeconds() * 1000 + date.getMilliseconds();
-    const sinceBoundary = (minute % 30) * 60000 + secondMs;
-    const untilBoundary = 30 * 60000 - sinceBoundary;
-    return sinceBoundary <= windowMs || untilBoundary <= windowMs;
-  }
-
   function speakReminder(){
-    // The :00/:30 announcement already includes elapsed sitting time.
-    // Avoid two independent speech events fighting/cancelling each other on iPhone.
-    if(settings.clockAlerts && (Date.now() - lastClockSpokenAt < 15000 || nearHalfHourBoundary())) return;
+    // Every configured sitting interval must announce. Never suppress it just
+    // because a clock announcement is close by; Web Speech queues both safely.
     const elapsed = spokenElapsed();
     speakText(`You have been sitting for ${elapsed}.`);
   }
