@@ -6,6 +6,9 @@
 <meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Awake">
+<link rel="apple-touch-icon" sizes="180x180" href="awake-icon-180.png">
+<link rel="icon" type="image/png" sizes="180x180" href="awake-icon-180.png">
 <title>Awake</title>
 <style>
 :root{
@@ -148,6 +151,41 @@ button,input{font:inherit;color:inherit}
   color:var(--muted);
 }
 .ctrl output{text-align:right}
+
+.toggleRow{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+}
+.switch{
+  position:relative;
+  width:42px;
+  height:24px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  background:#ffffff12;
+  cursor:pointer;
+}
+.switch::after{
+  content:"";
+  position:absolute;
+  top:3px;
+  left:3px;
+  width:16px;
+  height:16px;
+  border-radius:50%;
+  background:#8d8d94;
+  transition:.2s ease;
+}
+.switch.active{
+  background:#32aef52b;
+  border-color:#32aef58f;
+}
+.switch.active::after{
+  transform:translateX(18px);
+  background:#69c7ff;
+  box-shadow:0 0 12px #32aef5aa;
+}
 
 input[type=range]{
   appearance:none;
@@ -425,6 +463,13 @@ input[type=range]::-webkit-slider-thumb{
       <input id="reminder" type="range" min="0" max="3" step="1">
       <output id="reminderOut"></output>
     </div>
+    <div class="ctrl">
+      <label for="clockAlertsToggle">:00 / :30</label>
+      <div class="toggleRow">
+        <button id="clockAlertsToggle" class="switch" type="button" aria-label="Toggle hour and half-hour time announcements" aria-pressed="true"></button>
+      </div>
+      <output id="clockAlertsOut">On</output>
+    </div>
   </div>
 </section>
 
@@ -478,6 +523,8 @@ input[type=range]::-webkit-slider-thumb{
     intensity: $("#intensity"),
     brightness: $("#brightness"),
     reminder: $("#reminder"),
+    clockAlertsToggle: $("#clockAlertsToggle"),
+    clockAlertsOut: $("#clockAlertsOut"),
     alarm: $("#alarm"),
     speedOut: $("#speedOut"),
     intensityOut: $("#intensityOut"),
@@ -489,7 +536,7 @@ input[type=range]::-webkit-slider-thumb{
   };
 
   const REMINDER_MINUTES = [5,10,15,20];
-  const DEFAULTS = {speed:52,intensity:62,brightness:82,reminderIndex:1};
+  const DEFAULTS = {speed:52,intensity:62,brightness:82,reminderIndex:1,clockAlerts:true};
 
   let prefs = {};
   try{
@@ -500,7 +547,8 @@ input[type=range]::-webkit-slider-thumb{
     speed: Number.isFinite(+prefs.speed) ? +prefs.speed : DEFAULTS.speed,
     intensity: Number.isFinite(+prefs.intensity) ? +prefs.intensity : DEFAULTS.intensity,
     brightness: Number.isFinite(+prefs.brightness) ? +prefs.brightness : DEFAULTS.brightness,
-    reminderIndex: Number.isFinite(+prefs.reminderIndex) ? Math.max(0,Math.min(3,Math.round(+prefs.reminderIndex))) : DEFAULTS.reminderIndex
+    reminderIndex: Number.isFinite(+prefs.reminderIndex) ? Math.max(0,Math.min(3,Math.round(+prefs.reminderIndex))) : DEFAULTS.reminderIndex,
+    clockAlerts: typeof prefs.clockAlerts === "boolean" ? prefs.clockAlerts : DEFAULTS.clockAlerts
   };
 
   let controlsHidden = !!prefs.controlsHidden;
@@ -510,9 +558,15 @@ input[type=range]::-webkit-slider-thumb{
   let wakeLock = null;
   let wakeWanted = false;
   let noteTimer = 0;
-  let reminderOn = false;
-  let sittingStartedAt = 0;
+  let reminderOn = !!prefs.reminderOn;
+  let sittingStartedAt = Number.isFinite(+prefs.sittingStartedAt) ? +prefs.sittingStartedAt : 0;
   let reminderTimer = 0;
+  let clockAnnouncementTimer = 0;
+  let lastClockAnnouncementKey = prefs.lastClockAnnouncementKey || "";
+
+  if(reminderOn && !sittingStartedAt){
+    sittingStartedAt = Date.now();
+  }
 
   const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
   const rnd = (a,b) => a + Math.random() * (b-a);
@@ -521,7 +575,10 @@ input[type=range]::-webkit-slider-thumb{
     try{
       localStorage.setItem("awakeStarsPreferences", JSON.stringify({
         ...settings,
-        controlsHidden
+        controlsHidden,
+        reminderOn,
+        sittingStartedAt,
+        lastClockAnnouncementKey
       }));
     }catch{}
   }
@@ -613,6 +670,9 @@ input[type=range]::-webkit-slider-thumb{
     }
     E.reminder.value = settings.reminderIndex;
     E.reminderOut.value = REMINDER_MINUTES[settings.reminderIndex] + "m";
+    E.clockAlertsToggle.classList.toggle("active", settings.clockAlerts);
+    E.clockAlertsToggle.setAttribute("aria-pressed", String(settings.clockAlerts));
+    E.clockAlertsOut.value = settings.clockAlerts ? "On" : "Off";
     E.controls.classList.toggle("hidden", controlsHidden);
     E.controlsButton.classList.toggle("active", !controlsHidden);
     E.controlsButton.setAttribute("aria-pressed", String(!controlsHidden));
@@ -673,6 +733,18 @@ input[type=range]::-webkit-slider-thumb{
     }
   });
 
+  E.clockAlertsToggle.addEventListener("click", ()=>{
+    settings.clockAlerts = !settings.clockAlerts;
+    syncControls();
+    save();
+    clearTimeout(clockAnnouncementTimer);
+    clockAnnouncementTimer = 0;
+    if(reminderOn && settings.clockAlerts){
+      scheduleClockAnnouncement();
+    }
+    note(settings.clockAlerts ? "Hour / half-hour alerts on" : "Hour / half-hour alerts off");
+  });
+
   function spokenElapsed(){
     const totalMinutes = Math.max(1, Math.round((Date.now() - sittingStartedAt) / 60000));
     if(totalMinutes < 60) return `${totalMinutes} minute${totalMinutes === 1 ? "" : "s"}`;
@@ -683,10 +755,8 @@ input[type=range]::-webkit-slider-thumb{
       : `${hours} hour${hours === 1 ? "" : "s"}`;
   }
 
-  function speakReminder(){
-    const elapsed = spokenElapsed();
-    const text = `You have been sitting for ${elapsed}.`;
-    note(text, 4500);
+  function speakText(text, duration=4500){
+    note(text, duration);
     try{
       if("speechSynthesis" in window){
         speechSynthesis.cancel();
@@ -696,6 +766,51 @@ input[type=range]::-webkit-slider-thumb{
         speechSynthesis.speak(utterance);
       }
     }catch{}
+  }
+
+  function speakReminder(){
+    const elapsed = spokenElapsed();
+    speakText(`You have been sitting for ${elapsed}.`);
+  }
+
+  function spokenClockTime(date=new Date()){
+    return date.toLocaleTimeString([], {hour:"numeric",minute:"2-digit",hour12:true});
+  }
+
+  function clockAnnouncementKey(date=new Date()){
+    return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}-${date.getHours()}-${date.getMinutes() < 30 ? 0 : 30}`;
+  }
+
+  function speakClockAnnouncement(date=new Date(), catchUp=false){
+    if(!reminderOn || !sittingStartedAt || !settings.clockAlerts) return;
+    const key = clockAnnouncementKey(date);
+    if(key === lastClockAnnouncementKey && !catchUp) return;
+    lastClockAnnouncementKey = key;
+    save();
+    speakText(`It is ${spokenClockTime(date)}. You have been sitting for ${spokenElapsed()}.`, 6000);
+  }
+
+  function msUntilNextHalfHour(){
+    const now = new Date();
+    const next = new Date(now);
+    next.setSeconds(0,0);
+    if(now.getMinutes() < 30){
+      next.setMinutes(30);
+    }else{
+      next.setHours(now.getHours()+1);
+      next.setMinutes(0);
+    }
+    return Math.max(250, next.getTime() - now.getTime());
+  }
+
+  function scheduleClockAnnouncement(){
+    clearTimeout(clockAnnouncementTimer);
+    clockAnnouncementTimer = 0;
+    if(!reminderOn || !settings.clockAlerts) return;
+    clockAnnouncementTimer = setTimeout(()=>{
+      speakClockAnnouncement(new Date());
+      scheduleClockAnnouncement();
+    }, msUntilNextHalfHour());
   }
 
   function scheduleReminder(){
@@ -715,7 +830,9 @@ input[type=range]::-webkit-slider-thumb{
       sittingStartedAt = Date.now();
       updateSittingDisplay();
       scheduleReminder();
-      note(`Sitting reminder on · every ${REMINDER_MINUTES[settings.reminderIndex]} minutes`);
+      scheduleClockAnnouncement();
+      save();
+      note(`Sitting reminder on · every ${REMINDER_MINUTES[settings.reminderIndex]} minutes${settings.clockAlerts ? " · clock at :00/:30" : ""}`);
       try{
         if("speechSynthesis" in window){
           const unlock = new SpeechSynthesisUtterance("");
@@ -725,7 +842,11 @@ input[type=range]::-webkit-slider-thumb{
     }else{
       clearInterval(reminderTimer);
       reminderTimer = 0;
+      clearTimeout(clockAnnouncementTimer);
+      clockAnnouncementTimer = 0;
       sittingStartedAt = 0;
+      lastClockAnnouncementKey = "";
+      save();
       updateSittingDisplay();
       try{ if("speechSynthesis" in window) speechSynthesis.cancel(); }catch{}
       note("Sitting reminder off");
@@ -739,7 +860,10 @@ input[type=range]::-webkit-slider-thumb{
     initStars();
     syncControls();
     save();
-    if(reminderOn) scheduleReminder();
+    if(reminderOn){
+      scheduleReminder();
+      scheduleClockAnnouncement();
+    }
     note("Controls reset");
   });
 
@@ -831,10 +955,26 @@ input[type=range]::-webkit-slider-thumb{
   });
 
   document.addEventListener("visibilitychange", async ()=>{
-    if(document.visibilityState === "visible" && wakeWanted && !wakeLock){
-      const ok = await acquireWakeLock();
-      if(!ok) wakeWanted = false;
-      updatePowerState();
+    if(document.visibilityState === "visible"){
+      if(wakeWanted && !wakeLock){
+        const ok = await acquireWakeLock();
+        if(!ok) wakeWanted = false;
+        updatePowerState();
+      }
+
+      if(reminderOn){
+        updateSittingDisplay();
+        scheduleReminder();
+        scheduleClockAnnouncement();
+
+        if(settings.clockAlerts){
+          const now = new Date();
+          const key = clockAnnouncementKey(now);
+          if(key !== lastClockAnnouncementKey){
+            speakClockAnnouncement(now, true);
+          }
+        }
+      }
     }
   });
 
@@ -853,6 +993,13 @@ input[type=range]::-webkit-slider-thumb{
   updateClock();
   syncControls();
   resize();
+  E.alarm.classList.toggle("active", reminderOn);
+  E.alarm.setAttribute("aria-pressed", String(reminderOn));
+  updateSittingDisplay();
+  if(reminderOn){
+    scheduleReminder();
+    scheduleClockAnnouncement();
+  }
 
   setInterval(()=>{
     updateClock();
