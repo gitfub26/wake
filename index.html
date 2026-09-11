@@ -191,6 +191,40 @@ input[type=range]::-webkit-slider-thumb{
   justify-content:center;
   pointer-events:none;
 }
+
+#bottomCluster{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  pointer-events:auto;
+}
+
+#alarm{
+  width:42px;
+  height:42px;
+  border:1px solid #f6c945;
+  border-radius:50%;
+  background:#f6c945;
+  color:#171200;
+  display:grid;
+  place-items:center;
+  box-shadow:0 8px 24px #0008;
+  transition:.18s ease;
+}
+#alarm svg{
+  width:20px;
+  height:20px;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:1.8;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+#alarm.active{
+  box-shadow:0 0 0 5px #f6c94526,0 0 28px #f6c94566;
+  transform:scale(1.04);
+}
+
 #power{
   position:relative;
   width:64px;
@@ -273,7 +307,12 @@ input[type=range]::-webkit-slider-thumb{
     width:52px;
     height:52px;
   }
+  #alarm{
+    width:38px;
+    height:38px;
+  }
 }
+
 </style>
 </head>
 <body>
@@ -311,19 +350,34 @@ input[type=range]::-webkit-slider-thumb{
       <input id="brightness" type="range" min="10" max="100">
       <output id="brightnessOut"></output>
     </div>
+    <div class="ctrl">
+      <label for="reminder">Reminder</label>
+      <input id="reminder" type="range" min="0" max="3" step="1">
+      <output id="reminderOut"></output>
+    </div>
   </div>
 </section>
 
 <button id="show" type="button">Show Controls</button>
 
 <div id="bottom">
-  <button id="power" type="button" aria-label="Toggle wake mode">
-    <span id="ring"></span>
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 2.8v8.4"></path>
-      <path d="M7.15 5.75a8 8 0 1 0 9.7 0"></path>
-    </svg>
-  </button>
+  <div id="bottomCluster">
+    <button id="power" type="button" aria-label="Toggle wake mode">
+      <span id="ring"></span>
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 2.8v8.4"></path>
+        <path d="M7.15 5.75a8 8 0 1 0 9.7 0"></path>
+      </svg>
+    </button>
+    <button id="alarm" type="button" aria-label="Toggle sitting time reminder" aria-pressed="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M6.5 8.2A6.4 6.4 0 0 1 12 5a6.4 6.4 0 0 1 5.5 3.2c.7 1.2 1 2.6 1 4v2.3l1.4 2.3H4.1l1.4-2.3v-2.3c0-1.4.3-2.8 1-4Z"></path>
+        <path d="M9.5 19a2.8 2.8 0 0 0 5 0"></path>
+        <path d="M5.1 4.6 3.3 6.4"></path>
+        <path d="m18.9 4.6 1.8 1.8"></path>
+      </svg>
+    </button>
+  </div>
 </div>
 
 <script>
@@ -344,14 +398,18 @@ input[type=range]::-webkit-slider-thumb{
     speed: $("#speed"),
     intensity: $("#intensity"),
     brightness: $("#brightness"),
+    reminder: $("#reminder"),
+    alarm: $("#alarm"),
     speedOut: $("#speedOut"),
     intensityOut: $("#intensityOut"),
     brightnessOut: $("#brightnessOut"),
+    reminderOut: $("#reminderOut"),
     time: $("#time"),
     date: $("#date")
   };
 
-  const DEFAULTS = {speed:52,intensity:62,brightness:82};
+  const REMINDER_MINUTES = [5,10,15,20];
+  const DEFAULTS = {speed:52,intensity:62,brightness:82,reminderIndex:1};
 
   let prefs = {};
   try{
@@ -361,7 +419,8 @@ input[type=range]::-webkit-slider-thumb{
   const settings = {
     speed: Number.isFinite(+prefs.speed) ? +prefs.speed : DEFAULTS.speed,
     intensity: Number.isFinite(+prefs.intensity) ? +prefs.intensity : DEFAULTS.intensity,
-    brightness: Number.isFinite(+prefs.brightness) ? +prefs.brightness : DEFAULTS.brightness
+    brightness: Number.isFinite(+prefs.brightness) ? +prefs.brightness : DEFAULTS.brightness,
+    reminderIndex: Number.isFinite(+prefs.reminderIndex) ? Math.max(0,Math.min(3,Math.round(+prefs.reminderIndex))) : DEFAULTS.reminderIndex
   };
 
   let controlsHidden = !!prefs.controlsHidden;
@@ -371,6 +430,9 @@ input[type=range]::-webkit-slider-thumb{
   let wakeLock = null;
   let wakeWanted = false;
   let noteTimer = 0;
+  let reminderOn = false;
+  let sittingStartedAt = 0;
+  let reminderTimer = 0;
 
   const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
   const rnd = (a,b) => a + Math.random() * (b-a);
@@ -469,6 +531,8 @@ input[type=range]::-webkit-slider-thumb{
       E[name].value = settings[name];
       E[name+"Out"].value = settings[name];
     }
+    E.reminder.value = settings.reminderIndex;
+    E.reminderOut.value = REMINDER_MINUTES[settings.reminderIndex] + "m";
     E.controls.classList.toggle("hidden", controlsHidden);
     E.show.classList.toggle("visible", controlsHidden);
   }
@@ -498,12 +562,82 @@ input[type=range]::-webkit-slider-thumb{
     });
   }
 
+  E.reminder.addEventListener("input", ()=>{
+    settings.reminderIndex = Math.max(0,Math.min(3,Math.round(+E.reminder.value)));
+    E.reminderOut.value = REMINDER_MINUTES[settings.reminderIndex] + "m";
+    save();
+
+    if(reminderOn){
+      scheduleReminder();
+      note(`Reminder set to every ${REMINDER_MINUTES[settings.reminderIndex]} minutes`);
+    }
+  });
+
+  function spokenElapsed(){
+    const totalMinutes = Math.max(1, Math.round((Date.now() - sittingStartedAt) / 60000));
+    if(totalMinutes < 60) return `${totalMinutes} minute${totalMinutes === 1 ? "" : "s"}`;
+    const hours = Math.floor(totalMinutes / 60);
+    const mins = totalMinutes % 60;
+    return mins
+      ? `${hours} hour${hours === 1 ? "" : "s"} and ${mins} minute${mins === 1 ? "" : "s"}`
+      : `${hours} hour${hours === 1 ? "" : "s"}`;
+  }
+
+  function speakReminder(){
+    const elapsed = spokenElapsed();
+    const text = `You have been sitting for ${elapsed}.`;
+    note(text, 4500);
+    try{
+      if("speechSynthesis" in window){
+        speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 0.95;
+        utterance.pitch = 1;
+        speechSynthesis.speak(utterance);
+      }
+    }catch{}
+  }
+
+  function scheduleReminder(){
+    clearInterval(reminderTimer);
+    reminderTimer = 0;
+    if(!reminderOn) return;
+    const intervalMs = REMINDER_MINUTES[settings.reminderIndex] * 60000;
+    reminderTimer = setInterval(speakReminder, intervalMs);
+  }
+
+  function setReminderState(on){
+    reminderOn = on;
+    E.alarm.classList.toggle("active", reminderOn);
+    E.alarm.setAttribute("aria-pressed", String(reminderOn));
+
+    if(reminderOn){
+      sittingStartedAt = Date.now();
+      scheduleReminder();
+      note(`Sitting reminder on · every ${REMINDER_MINUTES[settings.reminderIndex]} minutes`);
+      try{
+        if("speechSynthesis" in window){
+          const unlock = new SpeechSynthesisUtterance("");
+          speechSynthesis.speak(unlock);
+        }
+      }catch{}
+    }else{
+      clearInterval(reminderTimer);
+      reminderTimer = 0;
+      try{ if("speechSynthesis" in window) speechSynthesis.cancel(); }catch{}
+      note("Sitting reminder off");
+    }
+  }
+
+  E.alarm.addEventListener("click", ()=>setReminderState(!reminderOn));
+
   E.reset.addEventListener("click", ()=>{
     Object.assign(settings, DEFAULTS);
     initStars();
     syncControls();
     save();
-    note("Star controls reset");
+    if(reminderOn) scheduleReminder();
+    note("Controls reset");
   });
 
   E.hide.addEventListener("click", ()=>{
