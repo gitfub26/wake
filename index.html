@@ -6,9 +6,6 @@
 <meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Awake">
-<link rel="apple-touch-icon" sizes="180x180" href="awake-icon-180.png">
-<link rel="icon" type="image/png" sizes="180x180" href="awake-icon-180.png">
 <title>Awake</title>
 <style>
 :root{
@@ -151,83 +148,6 @@ button,input{font:inherit;color:inherit}
   color:var(--muted);
 }
 .ctrl output{text-align:right}
-
-.voiceSelect{
-  grid-template-columns:68px minmax(0,1fr) 34px;
-}
-.voiceSelect select{
-  width:100%;
-  min-width:0;
-  height:30px;
-  padding:0 28px 0 9px;
-  border:1px solid var(--line);
-  border-radius:9px;
-  background:#ffffff10;
-  color:var(--fg);
-  font-size:10px;
-  outline:none;
-}
-.voiceSelect select:focus{
-  border-color:#77bfff;
-  box-shadow:0 0 0 3px #77bfff20;
-}
-.voiceSelect option{color:#000;background:#fff}
-#voicePreview{
-  width:30px;
-  height:30px;
-  padding:0;
-  border:1px solid #77bfff88;
-  border-radius:50%;
-  background:#77bfff20;
-  color:#9bd1ff;
-  display:grid;
-  place-items:center;
-  cursor:pointer;
-}
-#voicePreview:active{
-  background:#77bfff42;
-  color:#d8efff;
-}
-#voicePreview svg{
-  width:13px;
-  height:13px;
-  fill:currentColor;
-}
-
-.toggleRow{
-  display:flex;
-  align-items:center;
-  justify-content:flex-end;
-}
-.switch{
-  position:relative;
-  width:42px;
-  height:24px;
-  border:1px solid var(--line);
-  border-radius:999px;
-  background:#ffffff12;
-  cursor:pointer;
-}
-.switch::after{
-  content:"";
-  position:absolute;
-  top:3px;
-  left:3px;
-  width:16px;
-  height:16px;
-  border-radius:50%;
-  background:#8d8d94;
-  transition:.2s ease;
-}
-.switch.active{
-  background:#32aef52b;
-  border-color:#32aef58f;
-}
-.switch.active::after{
-  transform:translateX(18px);
-  background:#69c7ff;
-  box-shadow:0 0 12px #32aef5aa;
-}
 
 input[type=range]{
   appearance:none;
@@ -505,22 +425,6 @@ input[type=range]::-webkit-slider-thumb{
       <input id="reminder" type="range" min="0" max="3" step="1">
       <output id="reminderOut"></output>
     </div>
-    <div class="ctrl">
-      <label for="clockAlertsToggle">:00 / :30</label>
-      <div class="toggleRow">
-        <button id="clockAlertsToggle" class="switch" type="button" aria-label="Toggle hour and half-hour time announcements" aria-pressed="true"></button>
-      </div>
-      <output id="clockAlertsOut">On</output>
-    </div>
-    <div class="ctrl voiceSelect">
-      <label for="voiceSelect">Voice</label>
-      <select id="voiceSelect" aria-label="Select reminder voice">
-        <option value="">Default voice</option>
-      </select>
-      <button id="voicePreview" type="button" aria-label="Preview selected voice" title="Preview voice">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"></path></svg>
-      </button>
-    </div>
   </div>
 </section>
 
@@ -574,10 +478,6 @@ input[type=range]::-webkit-slider-thumb{
     intensity: $("#intensity"),
     brightness: $("#brightness"),
     reminder: $("#reminder"),
-    clockAlertsToggle: $("#clockAlertsToggle"),
-    clockAlertsOut: $("#clockAlertsOut"),
-    voiceSelect: $("#voiceSelect"),
-    voicePreview: $("#voicePreview"),
     alarm: $("#alarm"),
     speedOut: $("#speedOut"),
     intensityOut: $("#intensityOut"),
@@ -589,7 +489,7 @@ input[type=range]::-webkit-slider-thumb{
   };
 
   const REMINDER_MINUTES = [5,10,15,20];
-  const DEFAULTS = {speed:52,intensity:62,brightness:82,reminderIndex:1,clockAlerts:true,voiceName:""};
+  const DEFAULTS = {speed:52,intensity:62,brightness:82,reminderIndex:1};
 
   let prefs = {};
   try{
@@ -600,9 +500,7 @@ input[type=range]::-webkit-slider-thumb{
     speed: Number.isFinite(+prefs.speed) ? +prefs.speed : DEFAULTS.speed,
     intensity: Number.isFinite(+prefs.intensity) ? +prefs.intensity : DEFAULTS.intensity,
     brightness: Number.isFinite(+prefs.brightness) ? +prefs.brightness : DEFAULTS.brightness,
-    reminderIndex: Number.isFinite(+prefs.reminderIndex) ? Math.max(0,Math.min(3,Math.round(+prefs.reminderIndex))) : DEFAULTS.reminderIndex,
-    clockAlerts: typeof prefs.clockAlerts === "boolean" ? prefs.clockAlerts : DEFAULTS.clockAlerts,
-    voiceName: typeof prefs.voiceName === "string" ? prefs.voiceName : DEFAULTS.voiceName
+    reminderIndex: Number.isFinite(+prefs.reminderIndex) ? Math.max(0,Math.min(3,Math.round(+prefs.reminderIndex))) : DEFAULTS.reminderIndex
   };
 
   let controlsHidden = !!prefs.controlsHidden;
@@ -612,17 +510,9 @@ input[type=range]::-webkit-slider-thumb{
   let wakeLock = null;
   let wakeWanted = false;
   let noteTimer = 0;
-  let reminderOn = !!prefs.reminderOn;
-  let sittingStartedAt = Number.isFinite(+prefs.sittingStartedAt) ? +prefs.sittingStartedAt : 0;
+  let reminderOn = false;
+  let sittingStartedAt = 0;
   let reminderTimer = 0;
-  let clockAnnouncementTimer = 0;
-  let lastClockSpokenAt = 0;
-  let lastClockAnnouncementKey = prefs.lastClockAnnouncementKey || "";
-  let availableVoices = [];
-
-  if(reminderOn && !sittingStartedAt){
-    sittingStartedAt = Date.now();
-  }
 
   const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
   const rnd = (a,b) => a + Math.random() * (b-a);
@@ -631,10 +521,7 @@ input[type=range]::-webkit-slider-thumb{
     try{
       localStorage.setItem("awakeStarsPreferences", JSON.stringify({
         ...settings,
-        controlsHidden,
-        reminderOn,
-        sittingStartedAt,
-        lastClockAnnouncementKey
+        controlsHidden
       }));
     }catch{}
   }
@@ -726,10 +613,6 @@ input[type=range]::-webkit-slider-thumb{
     }
     E.reminder.value = settings.reminderIndex;
     E.reminderOut.value = REMINDER_MINUTES[settings.reminderIndex] + "m";
-    E.clockAlertsToggle.classList.toggle("active", settings.clockAlerts);
-    E.clockAlertsToggle.setAttribute("aria-pressed", String(settings.clockAlerts));
-    E.clockAlertsOut.value = settings.clockAlerts ? "On" : "Off";
-    if(E.voiceSelect) E.voiceSelect.value = availableVoices.some(v=>v.name===settings.voiceName) ? settings.voiceName : "";
     E.controls.classList.toggle("hidden", controlsHidden);
     E.controlsButton.classList.toggle("active", !controlsHidden);
     E.controlsButton.setAttribute("aria-pressed", String(!controlsHidden));
@@ -790,69 +673,6 @@ input[type=range]::-webkit-slider-thumb{
     }
   });
 
-  E.clockAlertsToggle.addEventListener("click", ()=>{
-    settings.clockAlerts = !settings.clockAlerts;
-    syncControls();
-    save();
-    clearTimeout(clockAnnouncementTimer);
-    clockAnnouncementTimer = 0;
-    if(reminderOn && settings.clockAlerts){
-      scheduleClockAnnouncement();
-    }
-    note(settings.clockAlerts ? "Hour / half-hour alerts on" : "Hour / half-hour alerts off");
-  });
-
-  E.voiceSelect.addEventListener("change", ()=>{
-    settings.voiceName = E.voiceSelect.value;
-    save();
-  });
-
-  E.voicePreview.addEventListener("click", ()=>{
-    const voice = selectedVoice();
-    speakText(voice ? "This is the selected Awake voice." : "This is the default Awake voice.", 3500);
-  });
-
-  function refreshVoices(){
-    if(!("speechSynthesis" in window) || !E.voiceSelect) return;
-    const voices = speechSynthesis.getVoices();
-    if(!voices.length) return;
-    availableVoices = voices.slice().sort((a,b)=>{
-      const ae = /^en(-|_)/i.test(a.lang) ? 0 : 1;
-      const be = /^en(-|_)/i.test(b.lang) ? 0 : 1;
-      return ae-be || a.name.localeCompare(b.name);
-    });
-    const previous = settings.voiceName;
-    E.voiceSelect.innerHTML = '<option value="">Default voice</option>';
-    for(const voice of availableVoices){
-      const option = document.createElement("option");
-      option.value = voice.name;
-      option.textContent = `${voice.name} · ${voice.lang}`;
-      E.voiceSelect.appendChild(option);
-    }
-    if(previous && availableVoices.some(v=>v.name===previous)){
-      E.voiceSelect.value = previous;
-    }else{
-      if(previous){
-        settings.voiceName = "";
-        save();
-      }
-      E.voiceSelect.value = "";
-    }
-  }
-
-  function selectedVoice(){
-    if(!settings.voiceName) return null;
-    return availableVoices.find(v=>v.name===settings.voiceName) || null;
-  }
-
-  function applyVoice(utterance){
-    const voice = selectedVoice();
-    if(voice){
-      utterance.voice = voice;
-      utterance.lang = voice.lang || utterance.lang;
-    }
-  }
-
   function spokenElapsed(){
     const totalMinutes = Math.max(1, Math.round((Date.now() - sittingStartedAt) / 60000));
     if(totalMinutes < 60) return `${totalMinutes} minute${totalMinutes === 1 ? "" : "s"}`;
@@ -863,69 +683,19 @@ input[type=range]::-webkit-slider-thumb{
       : `${hours} hour${hours === 1 ? "" : "s"}`;
   }
 
-  function speakText(text, duration=4500){
-    note(text, duration);
+  function speakReminder(){
+    const elapsed = spokenElapsed();
+    const text = `You have been sitting for ${elapsed}.`;
+    note(text, 4500);
     try{
       if("speechSynthesis" in window){
-        // Do not cancel here. iPhone may deliver timers a little late, and cancel()
-        // could erase a sitting reminder when a :00/:30 announcement lands nearby.
-        // Let Web Speech queue the utterances in order instead.
+        speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
-        applyVoice(utterance);
         utterance.rate = 0.95;
         utterance.pitch = 1;
         speechSynthesis.speak(utterance);
       }
     }catch{}
-  }
-
-  function speakReminder(){
-    // Every configured sitting interval must announce. Never suppress it just
-    // because a clock announcement is close by; Web Speech queues both safely.
-    const elapsed = spokenElapsed();
-    speakText(`You have been sitting for ${elapsed}.`);
-  }
-
-  function spokenClockTime(date=new Date()){
-    return date.toLocaleTimeString([], {hour:"numeric",minute:"2-digit",hour12:true});
-  }
-
-  function clockAnnouncementKey(date=new Date()){
-    return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}-${date.getHours()}-${date.getMinutes() < 30 ? 0 : 30}`;
-  }
-
-  function speakClockAnnouncement(date=new Date(), catchUp=false){
-    if(!reminderOn || !sittingStartedAt || !settings.clockAlerts) return;
-    const key = clockAnnouncementKey(date);
-    if(key === lastClockAnnouncementKey && !catchUp) return;
-    lastClockAnnouncementKey = key;
-    lastClockSpokenAt = Date.now();
-    save();
-    // Keep this as one utterance so iOS cannot split the clock and sitting-time portions.
-    speakText(`It is ${spokenClockTime(date)}, and you have been sitting for ${spokenElapsed()}.`, 6000);
-  }
-
-  function msUntilNextHalfHour(){
-    const now = new Date();
-    const next = new Date(now);
-    next.setSeconds(0,0);
-    if(now.getMinutes() < 30){
-      next.setMinutes(30);
-    }else{
-      next.setHours(now.getHours()+1);
-      next.setMinutes(0);
-    }
-    return Math.max(250, next.getTime() - now.getTime());
-  }
-
-  function scheduleClockAnnouncement(){
-    clearTimeout(clockAnnouncementTimer);
-    clockAnnouncementTimer = 0;
-    if(!reminderOn || !settings.clockAlerts) return;
-    clockAnnouncementTimer = setTimeout(()=>{
-      speakClockAnnouncement(new Date());
-      scheduleClockAnnouncement();
-    }, msUntilNextHalfHour());
   }
 
   function scheduleReminder(){
@@ -945,24 +715,17 @@ input[type=range]::-webkit-slider-thumb{
       sittingStartedAt = Date.now();
       updateSittingDisplay();
       scheduleReminder();
-      scheduleClockAnnouncement();
-      save();
-      note(`Sitting reminder on · every ${REMINDER_MINUTES[settings.reminderIndex]} minutes${settings.clockAlerts ? " · clock at :00/:30" : ""}`);
+      note(`Sitting reminder on · every ${REMINDER_MINUTES[settings.reminderIndex]} minutes`);
       try{
         if("speechSynthesis" in window){
           const unlock = new SpeechSynthesisUtterance("");
-          applyVoice(unlock);
           speechSynthesis.speak(unlock);
         }
       }catch{}
     }else{
       clearInterval(reminderTimer);
       reminderTimer = 0;
-      clearTimeout(clockAnnouncementTimer);
-      clockAnnouncementTimer = 0;
       sittingStartedAt = 0;
-      lastClockAnnouncementKey = "";
-      save();
       updateSittingDisplay();
       try{ if("speechSynthesis" in window) speechSynthesis.cancel(); }catch{}
       note("Sitting reminder off");
@@ -976,10 +739,7 @@ input[type=range]::-webkit-slider-thumb{
     initStars();
     syncControls();
     save();
-    if(reminderOn){
-      scheduleReminder();
-      scheduleClockAnnouncement();
-    }
+    if(reminderOn) scheduleReminder();
     note("Controls reset");
   });
 
@@ -1071,26 +831,10 @@ input[type=range]::-webkit-slider-thumb{
   });
 
   document.addEventListener("visibilitychange", async ()=>{
-    if(document.visibilityState === "visible"){
-      if(wakeWanted && !wakeLock){
-        const ok = await acquireWakeLock();
-        if(!ok) wakeWanted = false;
-        updatePowerState();
-      }
-
-      if(reminderOn){
-        updateSittingDisplay();
-        scheduleReminder();
-        scheduleClockAnnouncement();
-
-        if(settings.clockAlerts){
-          const now = new Date();
-          const key = clockAnnouncementKey(now);
-          if(key !== lastClockAnnouncementKey){
-            speakClockAnnouncement(now, true);
-          }
-        }
-      }
+    if(document.visibilityState === "visible" && wakeWanted && !wakeLock){
+      const ok = await acquireWakeLock();
+      if(!ok) wakeWanted = false;
+      updatePowerState();
     }
   });
 
@@ -1107,22 +851,8 @@ input[type=range]::-webkit-slider-thumb{
   }
 
   updateClock();
-  refreshVoices();
-  if("speechSynthesis" in window){
-    speechSynthesis.addEventListener?.("voiceschanged", refreshVoices);
-    speechSynthesis.onvoiceschanged = refreshVoices;
-    setTimeout(refreshVoices, 250);
-    setTimeout(refreshVoices, 1000);
-  }
   syncControls();
   resize();
-  E.alarm.classList.toggle("active", reminderOn);
-  E.alarm.setAttribute("aria-pressed", String(reminderOn));
-  updateSittingDisplay();
-  if(reminderOn){
-    scheduleReminder();
-    scheduleClockAnnouncement();
-  }
 
   setInterval(()=>{
     updateClock();
