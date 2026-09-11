@@ -616,6 +616,7 @@ input[type=range]::-webkit-slider-thumb{
   let sittingStartedAt = Number.isFinite(+prefs.sittingStartedAt) ? +prefs.sittingStartedAt : 0;
   let reminderTimer = 0;
   let clockAnnouncementTimer = 0;
+  let lastClockSpokenAt = 0;
   let lastClockAnnouncementKey = prefs.lastClockAnnouncementKey || "";
   let availableVoices = [];
 
@@ -876,7 +877,18 @@ input[type=range]::-webkit-slider-thumb{
     }catch{}
   }
 
+  function nearHalfHourBoundary(date=new Date(), windowMs=15000){
+    const minute = date.getMinutes();
+    const secondMs = date.getSeconds() * 1000 + date.getMilliseconds();
+    const sinceBoundary = (minute % 30) * 60000 + secondMs;
+    const untilBoundary = 30 * 60000 - sinceBoundary;
+    return sinceBoundary <= windowMs || untilBoundary <= windowMs;
+  }
+
   function speakReminder(){
+    // The :00/:30 announcement already includes elapsed sitting time.
+    // Avoid two independent speech events fighting/cancelling each other on iPhone.
+    if(settings.clockAlerts && (Date.now() - lastClockSpokenAt < 15000 || nearHalfHourBoundary())) return;
     const elapsed = spokenElapsed();
     speakText(`You have been sitting for ${elapsed}.`);
   }
@@ -894,8 +906,10 @@ input[type=range]::-webkit-slider-thumb{
     const key = clockAnnouncementKey(date);
     if(key === lastClockAnnouncementKey && !catchUp) return;
     lastClockAnnouncementKey = key;
+    lastClockSpokenAt = Date.now();
     save();
-    speakText(`It is ${spokenClockTime(date)}. You have been sitting for ${spokenElapsed()}.`, 6000);
+    // Keep this as one utterance so iOS cannot split the clock and sitting-time portions.
+    speakText(`It is ${spokenClockTime(date)}, and you have been sitting for ${spokenElapsed()}.`, 6000);
   }
 
   function msUntilNextHalfHour(){
