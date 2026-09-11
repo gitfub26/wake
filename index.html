@@ -152,6 +152,27 @@ button,input{font:inherit;color:inherit}
 }
 .ctrl output{text-align:right}
 
+.voiceSelect{
+  grid-template-columns:68px minmax(0,1fr);
+}
+.voiceSelect select{
+  width:100%;
+  min-width:0;
+  height:30px;
+  padding:0 28px 0 9px;
+  border:1px solid var(--line);
+  border-radius:9px;
+  background:#ffffff10;
+  color:var(--fg);
+  font-size:10px;
+  outline:none;
+}
+.voiceSelect select:focus{
+  border-color:#77bfff;
+  box-shadow:0 0 0 3px #77bfff20;
+}
+.voiceSelect option{color:#000;background:#fff}
+
 .toggleRow{
   display:flex;
   align-items:center;
@@ -470,6 +491,12 @@ input[type=range]::-webkit-slider-thumb{
       </div>
       <output id="clockAlertsOut">On</output>
     </div>
+    <div class="ctrl voiceSelect">
+      <label for="voiceSelect">Voice</label>
+      <select id="voiceSelect" aria-label="Select reminder voice">
+        <option value="">Default voice</option>
+      </select>
+    </div>
   </div>
 </section>
 
@@ -525,6 +552,7 @@ input[type=range]::-webkit-slider-thumb{
     reminder: $("#reminder"),
     clockAlertsToggle: $("#clockAlertsToggle"),
     clockAlertsOut: $("#clockAlertsOut"),
+    voiceSelect: $("#voiceSelect"),
     alarm: $("#alarm"),
     speedOut: $("#speedOut"),
     intensityOut: $("#intensityOut"),
@@ -536,7 +564,7 @@ input[type=range]::-webkit-slider-thumb{
   };
 
   const REMINDER_MINUTES = [5,10,15,20];
-  const DEFAULTS = {speed:52,intensity:62,brightness:82,reminderIndex:1,clockAlerts:true};
+  const DEFAULTS = {speed:52,intensity:62,brightness:82,reminderIndex:1,clockAlerts:true,voiceName:""};
 
   let prefs = {};
   try{
@@ -548,7 +576,8 @@ input[type=range]::-webkit-slider-thumb{
     intensity: Number.isFinite(+prefs.intensity) ? +prefs.intensity : DEFAULTS.intensity,
     brightness: Number.isFinite(+prefs.brightness) ? +prefs.brightness : DEFAULTS.brightness,
     reminderIndex: Number.isFinite(+prefs.reminderIndex) ? Math.max(0,Math.min(3,Math.round(+prefs.reminderIndex))) : DEFAULTS.reminderIndex,
-    clockAlerts: typeof prefs.clockAlerts === "boolean" ? prefs.clockAlerts : DEFAULTS.clockAlerts
+    clockAlerts: typeof prefs.clockAlerts === "boolean" ? prefs.clockAlerts : DEFAULTS.clockAlerts,
+    voiceName: typeof prefs.voiceName === "string" ? prefs.voiceName : DEFAULTS.voiceName
   };
 
   let controlsHidden = !!prefs.controlsHidden;
@@ -563,6 +592,7 @@ input[type=range]::-webkit-slider-thumb{
   let reminderTimer = 0;
   let clockAnnouncementTimer = 0;
   let lastClockAnnouncementKey = prefs.lastClockAnnouncementKey || "";
+  let availableVoices = [];
 
   if(reminderOn && !sittingStartedAt){
     sittingStartedAt = Date.now();
@@ -673,6 +703,7 @@ input[type=range]::-webkit-slider-thumb{
     E.clockAlertsToggle.classList.toggle("active", settings.clockAlerts);
     E.clockAlertsToggle.setAttribute("aria-pressed", String(settings.clockAlerts));
     E.clockAlertsOut.value = settings.clockAlerts ? "On" : "Off";
+    if(E.voiceSelect) E.voiceSelect.value = availableVoices.some(v=>v.name===settings.voiceName) ? settings.voiceName : "";
     E.controls.classList.toggle("hidden", controlsHidden);
     E.controlsButton.classList.toggle("active", !controlsHidden);
     E.controlsButton.setAttribute("aria-pressed", String(!controlsHidden));
@@ -745,6 +776,54 @@ input[type=range]::-webkit-slider-thumb{
     note(settings.clockAlerts ? "Hour / half-hour alerts on" : "Hour / half-hour alerts off");
   });
 
+  E.voiceSelect.addEventListener("change", ()=>{
+    settings.voiceName = E.voiceSelect.value;
+    save();
+    const voice = selectedVoice();
+    speakText(voice ? `Voice set to ${voice.name}.` : "Default voice selected.", 3500);
+  });
+
+  function refreshVoices(){
+    if(!("speechSynthesis" in window) || !E.voiceSelect) return;
+    const voices = speechSynthesis.getVoices();
+    if(!voices.length) return;
+    availableVoices = voices.slice().sort((a,b)=>{
+      const ae = /^en(-|_)/i.test(a.lang) ? 0 : 1;
+      const be = /^en(-|_)/i.test(b.lang) ? 0 : 1;
+      return ae-be || a.name.localeCompare(b.name);
+    });
+    const previous = settings.voiceName;
+    E.voiceSelect.innerHTML = '<option value="">Default voice</option>';
+    for(const voice of availableVoices){
+      const option = document.createElement("option");
+      option.value = voice.name;
+      option.textContent = `${voice.name} · ${voice.lang}`;
+      E.voiceSelect.appendChild(option);
+    }
+    if(previous && availableVoices.some(v=>v.name===previous)){
+      E.voiceSelect.value = previous;
+    }else{
+      if(previous){
+        settings.voiceName = "";
+        save();
+      }
+      E.voiceSelect.value = "";
+    }
+  }
+
+  function selectedVoice(){
+    if(!settings.voiceName) return null;
+    return availableVoices.find(v=>v.name===settings.voiceName) || null;
+  }
+
+  function applyVoice(utterance){
+    const voice = selectedVoice();
+    if(voice){
+      utterance.voice = voice;
+      utterance.lang = voice.lang || utterance.lang;
+    }
+  }
+
   function spokenElapsed(){
     const totalMinutes = Math.max(1, Math.round((Date.now() - sittingStartedAt) / 60000));
     if(totalMinutes < 60) return `${totalMinutes} minute${totalMinutes === 1 ? "" : "s"}`;
@@ -761,6 +840,7 @@ input[type=range]::-webkit-slider-thumb{
       if("speechSynthesis" in window){
         speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
+        applyVoice(utterance);
         utterance.rate = 0.95;
         utterance.pitch = 1;
         speechSynthesis.speak(utterance);
@@ -836,6 +916,7 @@ input[type=range]::-webkit-slider-thumb{
       try{
         if("speechSynthesis" in window){
           const unlock = new SpeechSynthesisUtterance("");
+          applyVoice(unlock);
           speechSynthesis.speak(unlock);
         }
       }catch{}
@@ -991,6 +1072,13 @@ input[type=range]::-webkit-slider-thumb{
   }
 
   updateClock();
+  refreshVoices();
+  if("speechSynthesis" in window){
+    speechSynthesis.addEventListener?.("voiceschanged", refreshVoices);
+    speechSynthesis.onvoiceschanged = refreshVoices;
+    setTimeout(refreshVoices, 250);
+    setTimeout(refreshVoices, 1000);
+  }
   syncControls();
   resize();
   E.alarm.classList.toggle("active", reminderOn);
