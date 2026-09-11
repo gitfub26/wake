@@ -188,7 +188,7 @@ input[type=range]::-webkit-slider-thumb{
   font-weight:750;
   text-transform:uppercase;
 }
-#show.visible{display:block}
+#show.visible{display:none}
 
 #bottom{
   position:fixed;
@@ -207,6 +207,40 @@ input[type=range]::-webkit-slider-thumb{
   position:absolute;
   inset:0;
   pointer-events:none;
+}
+
+#controlsButton{
+  position:absolute;
+  left:calc(50% - 74px);
+  top:50%;
+  transform:translateY(-50%);
+  width:32px;
+  height:32px;
+  border:1px solid #79cfff;
+  border-radius:50%;
+  background:#79cfff;
+  color:#06141d;
+  display:grid;
+  place-items:center;
+  pointer-events:auto;
+  box-shadow:0 8px 24px #0008;
+  transition:.18s ease;
+}
+#controlsButton svg{
+  width:14px;
+  height:14px;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:1.8;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+#controlsButton.active{
+  border-color:#32aef5;
+  background:#32aef5;
+  color:#001019;
+  box-shadow:0 0 0 5px #32aef52b,0 0 30px #32aef57a;
+  transform:translateY(-50%) scale(1.04);
 }
 
 #alarm{
@@ -328,6 +362,15 @@ input[type=range]::-webkit-slider-thumb{
     width:52px;
     height:52px;
   }
+  #controlsButton{
+    left:calc(50% - 60px);
+    width:26px;
+    height:26px;
+  }
+  #controlsButton svg{
+    width:12px;
+    height:12px;
+  }
   #alarm{
     left:calc(50% + 34px);
     width:26px;
@@ -385,10 +428,19 @@ input[type=range]::-webkit-slider-thumb{
   </div>
 </section>
 
-<button id="show" type="button">Show Controls</button>
 
 <div id="bottom">
   <div id="bottomCluster">
+    <button id="controlsButton" type="button" aria-label="Toggle controls" aria-pressed="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 7h10"></path>
+        <path d="M18 7h2"></path>
+        <circle cx="16" cy="7" r="2"></circle>
+        <path d="M4 17h2"></path>
+        <path d="M10 17h10"></path>
+        <circle cx="8" cy="17" r="2"></circle>
+      </svg>
+    </button>
     <button id="power" type="button" aria-label="Toggle wake mode">
       <span id="ring"></span>
       <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -419,7 +471,7 @@ input[type=range]::-webkit-slider-thumb{
     note: $("#note"),
     power: $("#power"),
     controls: $("#controls"),
-    show: $("#show"),
+    controlsButton: $("#controlsButton"),
     hide: $("#hide"),
     reset: $("#reset"),
     speed: $("#speed"),
@@ -562,7 +614,8 @@ input[type=range]::-webkit-slider-thumb{
     E.reminder.value = settings.reminderIndex;
     E.reminderOut.value = REMINDER_MINUTES[settings.reminderIndex] + "m";
     E.controls.classList.toggle("hidden", controlsHidden);
-    E.show.classList.toggle("visible", controlsHidden);
+    E.controlsButton.classList.toggle("active", !controlsHidden);
+    E.controlsButton.setAttribute("aria-pressed", String(!controlsHidden));
   }
 
   function formatSittingTime(ms){
@@ -696,8 +749,8 @@ input[type=range]::-webkit-slider-thumb{
     save();
   });
 
-  E.show.addEventListener("click", ()=>{
-    controlsHidden = false;
+  E.controlsButton.addEventListener("click", ()=>{
+    controlsHidden = !controlsHidden;
     syncControls();
     save();
   });
